@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import {
@@ -10,34 +11,49 @@ import {
   ChevronUp,
   Link as LinkIcon,
   Clock,
+  Unlink,
 } from "lucide-react";
 
 interface Task {
   id: string;
   title: string;
   description?: string;
-  role?: string;
+  roles?: Array<{ id: string; code: string; name: string }>;
+  procedures?: Array<{ id: string; procedure_id: string; code: string; title: string; is_primary: boolean }>;
   location?: string;
   created_at?: string;
 }
 
 interface SuggestedTraining {
   training_id: string;
-  training_title: string;
-  confidence: number;
+  title: string;
+  score: number;
+  snippet?: string | null;
+}
+
+interface ProcedureOption {
+  id: string;
+  code: string;
+  title: string;
 }
 
 export default function TasksPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", role: "", location: "" });
+  const [form, setForm] = useState({ title: "", description: "", location: "" });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<Record<string, SuggestedTraining[]>>({});
   const [loadingSugg, setLoadingSugg] = useState<string | null>(null);
+  const [selectedProcedureByTask, setSelectedProcedureByTask] = useState<Record<string, string>>({});
 
   const { data: tasks, isLoading } = useQuery<Task[]>({
     queryKey: ["tasks"],
     queryFn: () => api.get("/tasks").then((r) => r.data),
+  });
+
+  const { data: procedures } = useQuery<ProcedureOption[]>({
+    queryKey: ["procedures"],
+    queryFn: () => api.get("/procedures").then((r) => r.data),
   });
 
   const createMutation = useMutation({
@@ -45,7 +61,24 @@ export default function TasksPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       setShowForm(false);
-      setForm({ title: "", description: "", role: "", location: "" });
+      setForm({ title: "", description: "", location: "" });
+    },
+  });
+
+  const linkProcedureMutation = useMutation({
+    mutationFn: ({ taskId, procedureId }: { taskId: string; procedureId: string }) =>
+      api.post(`/tasks/${taskId}/procedure-links`, { procedure_id: procedureId }).then((r) => r.data),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      setSelectedProcedureByTask((current) => ({ ...current, [variables.taskId]: "" }));
+    },
+  });
+
+  const unlinkProcedureMutation = useMutation({
+    mutationFn: ({ taskId, procedureId }: { taskId: string; procedureId: string }) =>
+      api.delete(`/tasks/${taskId}/procedure-links/${procedureId}`).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
     },
   });
 
@@ -79,7 +112,7 @@ export default function TasksPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tareas</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Gestiona tareas operativas y vincula capacitaciones relevantes
+            Gestiona tareas operativas, sus procedimientos y sugerencias de training
           </p>
         </div>
         <button
@@ -118,17 +151,7 @@ export default function TasksPage() {
               placeholder="Describe la tarea…"
             />
           </label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Rol</span>
-              <input
-                type="text"
-                value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                placeholder="Ej: Cocina"
-              />
-            </label>
+          <div className="grid gap-4 sm:grid-cols-1">
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-gray-700">Ubicación</span>
               <input
@@ -190,12 +213,23 @@ export default function TasksPage() {
                 <div className="flex items-start gap-4 p-5">
                   <CheckSquare className="mt-0.5 h-5 w-5 flex-shrink-0 text-indigo-500" />
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-semibold text-gray-900">{task.title}</h3>
+                    <Link to={`/tasks/${task.id}`} className="block">
+                      <h3 className="text-sm font-semibold text-gray-900 hover:text-indigo-700">
+                        {task.title}
+                      </h3>
+                    </Link>
                     {task.description && (
                       <p className="mt-1 text-sm text-gray-600">{task.description}</p>
                     )}
                     <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                      {task.role && <span>Rol: {task.role}</span>}
+                      {!!task.roles?.length && (
+                        <span>Roles: {task.roles.map((role) => role.name).join(", ")}</span>
+                      )}
+                      {!!task.procedures?.length && (
+                        <span>
+                          Procedimientos: {task.procedures.map((procedure) => procedure.code).join(", ")}
+                        </span>
+                      )}
                       {task.location && <span>Ubicación: {task.location}</span>}
                       {task.created_at && (
                         <span className="flex items-center gap-1">
@@ -205,6 +239,12 @@ export default function TasksPage() {
                       )}
                     </div>
                   </div>
+                  <Link
+                    to={`/tasks/${task.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+                  >
+                    Ver detalles
+                  </Link>
                   <button
                     onClick={() => fetchSuggestions(task.id)}
                     className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
@@ -221,6 +261,88 @@ export default function TasksPage() {
 
                 {isExpanded && (
                   <div className="border-t border-gray-100 px-5 py-4">
+                    <div className="mb-5 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-medium text-gray-500">Procedimientos vinculados</p>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={selectedProcedureByTask[task.id] ?? ""}
+                            onChange={(event) =>
+                              setSelectedProcedureByTask((current) => ({
+                                ...current,
+                                [task.id]: event.target.value,
+                              }))
+                            }
+                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs text-gray-700"
+                          >
+                            <option value="">Agregar procedimiento</option>
+                            {procedures
+                              ?.filter(
+                                (procedure) =>
+                                  !task.procedures?.some((linked) => linked.procedure_id === procedure.id),
+                              )
+                              .map((procedure) => (
+                                <option key={procedure.id} value={procedure.id}>
+                                  {procedure.code} · {procedure.title}
+                                </option>
+                              ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={
+                              !selectedProcedureByTask[task.id] || linkProcedureMutation.isPending
+                            }
+                            onClick={() =>
+                              linkProcedureMutation.mutate({
+                                taskId: task.id,
+                                procedureId: selectedProcedureByTask[task.id],
+                              })
+                            }
+                            className="rounded-lg border border-indigo-200 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                          >
+                            Vincular
+                          </button>
+                        </div>
+                      </div>
+                      {!task.procedures?.length ? (
+                        <p className="text-sm text-gray-400">
+                          Esta tarea todavía no tiene procedimientos vinculados.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {task.procedures.map((procedure) => (
+                            <div
+                              key={procedure.id}
+                              className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-gray-800">
+                                  {procedure.code} · {procedure.title}
+                                </p>
+                                {procedure.is_primary && (
+                                  <p className="text-xs text-gray-400">Marcado como principal</p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                disabled={unlinkProcedureMutation.isPending}
+                                onClick={() =>
+                                  unlinkProcedureMutation.mutate({
+                                    taskId: task.id,
+                                    procedureId: procedure.procedure_id,
+                                  })
+                                }
+                                className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              >
+                                <Unlink className="h-3 w-3" />
+                                Quitar
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     {isLoadingThis ? (
                       <div className="flex items-center gap-2 text-sm text-gray-400">
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -242,15 +364,18 @@ export default function TasksPage() {
                           >
                             <div>
                               <p className="text-sm font-medium text-gray-800">
-                                {s.training_title}
+                                {s.title}
                               </p>
                               <p className="text-xs text-gray-400">
-                                Confianza: {(s.confidence * 100).toFixed(0)}%
+                                Confianza: {(s.score * 100).toFixed(0)}%
                               </p>
+                              {s.snippet && (
+                                <p className="mt-1 max-w-xl text-xs text-gray-500">{s.snippet}</p>
+                              )}
                             </div>
                             <span className="inline-flex items-center gap-1 text-xs text-indigo-600">
                               <LinkIcon className="h-3 w-3" />
-                              Vinculada
+                              Sugerida
                             </span>
                           </div>
                         ))}

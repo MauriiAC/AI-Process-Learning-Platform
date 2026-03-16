@@ -2,7 +2,21 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth, trainings, uploads, search, assignments, tasks, incidents, dashboard
+from app.routers import (
+    assignments,
+    auth,
+    change_events,
+    compliance,
+    dashboard,
+    incidents,
+    procedures,
+    roles,
+    search,
+    tasks,
+    trainings,
+    uploads,
+    users,
+)
 
 app = FastAPI(title="AI Mini-Training API", version="0.1.0", redirect_slashes=False)
 
@@ -30,6 +44,11 @@ app.include_router(assignments.router)
 app.include_router(tasks.router)
 app.include_router(incidents.router)
 app.include_router(dashboard.router)
+app.include_router(roles.router)
+app.include_router(procedures.router)
+app.include_router(compliance.router)
+app.include_router(change_events.router)
+app.include_router(users.router)
 
 
 @app.get("/health")

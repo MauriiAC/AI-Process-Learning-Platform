@@ -1,6 +1,6 @@
-# AI Mini-Training Platform
+# ProcedureOps MVP
 
-Plataforma para generar mini-capacitaciones a partir de videos operativos cortos (\<= 5 min). La IA analiza el video, extrae la estructura del contenido y genera evaluaciones con evidencia verificable (timestamps, citas del transcript).
+Plataforma para gestionar procedimientos versionados y generar trainings derivados con IA a partir de videos operativos cortos (\<= 5 min). `Procedure` define el concepto, `ProcedureVersion` concentra el contenido, el video y la inteligencia de fuente (transcript, chunks, frames, embeddings y estructura canónica), y `Training` queda como artefacto derivado 1 a 1 para despliegue y evaluación pedagógica.
 
 ## Stack
 
@@ -90,11 +90,42 @@ alembic upgrade head
 python seed.py
 ```
 
+Para un reset reproducible del nuevo dominio:
+
+```bash
+dropdb ai_training --if-exists
+createdb ai_training
+alembic upgrade head
+python seed.py
+```
+
+`seed.py` ya no crea el esquema con `Base.metadata.create_all()`: Alembic es el camino principal para bootstrapear la base.
+
+Flujo recomendado del MVP:
+
+```text
+1. Crear Procedure
+2. Crear ProcedureVersion
+3. Subir video fuente a la versión
+4. Esperar source processing = READY
+5. Generar training derivado
+6. Revisar/iterar el training
+7. Asignar y medir compliance
+```
+
 Iniciar el servidor:
 
 ```bash
-uvicorn app.main:app --reload --port 8000
+make dev
 ```
+
+Si necesitás otro puerto:
+
+```bash
+make dev PORT=8010
+```
+
+El target `make dev` levanta `uvicorn` con `--reload-dir app` y excluye `.venv` y caches comunes del watcher para evitar reinicios espurios del backend cuando cambian archivos dentro del entorno virtual.
 
 La API queda disponible en `http://localhost:8000`. Documentación interactiva en `http://localhost:8000/docs`.
 
@@ -116,9 +147,9 @@ El script `seed.py` crea estos usuarios:
 | Email | Password | Rol | Ubicación |
 |-------|----------|-----|-----------|
 | `admin@demo.com` | `admin123` | admin | Buenos Aires |
+| `sofia@demo.com` | `demo123` | supervisor | Buenos Aires |
 | `carlos@demo.com` | `demo123` | kitchen | Buenos Aires |
-| `ana@demo.com` | `demo123` | employee | Córdoba |
-| `luis@demo.com` | `demo123` | supervisor | Buenos Aires |
+| `ana@demo.com` | `demo123` | cashier | Córdoba |
 
 ## Variables de entorno
 
@@ -199,14 +230,18 @@ S3_PUBLIC_URL=https://<tu-dominio-publico-r2>
 |--------|------|-------------|
 | `POST` | `/auth/register` | Registrar usuario |
 | `POST` | `/auth/login` | Login (devuelve JWT) |
-| `GET` | `/trainings` | Listar capacitaciones |
-| `POST` | `/trainings` | Crear capacitación |
+| `GET` | `/trainings` | Listar trainings derivados |
+| `POST` | `/trainings` | Crear training derivado para una `procedure_version_id` |
 | `POST` | `/trainings/{id}/generate` | Generar contenido con IA |
 | `POST` | `/trainings/{id}/iterate` | Iterar con instrucciones |
 | `GET` | `/trainings/{id}/cost-summary` | Resumen de costo/tokens del procesamiento |
-| `GET` | `/trainings/search` | Búsqueda semántica |
+| `GET` | `/procedures/search` | Buscar procedimientos/versiones por significado |
 | `POST` | `/uploads/presign` | Obtener URL pre-firmada para subir archivos |
+| `POST` | `/procedures/{id}/versions` | Crear una nueva versión de procedimiento |
+| `POST` | `/procedures/versions/{id}/source-asset` | Registrar/reemplazar video fuente de una versión y disparar source processing |
+| `POST` | `/procedures/versions/{id}/generate-training` | Crear o regenerar el training derivado de una versión ya procesada |
 | `GET/POST` | `/assignments` | Gestionar asignaciones |
 | `GET/POST` | `/incidents` | Gestionar incidentes |
+| `GET/POST` | `/incidents/{id}/analysis-runs` | Guardar y reutilizar memoria de análisis operativo |
 | `GET/POST` | `/tasks` | Gestionar tareas |
 | `GET` | `/dashboard` | Métricas y estadísticas |

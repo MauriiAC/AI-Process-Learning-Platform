@@ -9,12 +9,21 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.assignment import Assignment
 from app.models.quiz import QuizQuestion
+from app.models.role import UserRoleAssignment
 from app.models.training import Training
 from app.models.user import User
 from app.schemas.assignment import AssignmentCreate, AssignmentOut
 from app.schemas.quiz import QuizSubmission
+from app.services.compliance_service import sync_user_procedure_compliance
 
 router = APIRouter(prefix="/assignments", tags=["assignments"])
+
+
+def _serialize_assignment(assignment: Assignment) -> AssignmentOut:
+    payload = AssignmentOut.model_validate(assignment).model_dump()
+    payload["training_title"] = assignment.training.title if assignment.training else None
+    payload["user_name"] = assignment.user.name if assignment.user else None
+    return AssignmentOut(**payload)
 
 
 @router.post("", response_model=list[AssignmentOut], status_code=status.HTTP_201_CREATED)
@@ -31,13 +40,21 @@ async def create_assignments(
     if payload.user_ids:
         user_ids = payload.user_ids
     else:
-        query = select(User.id)
-        if payload.role:
-            query = query.where(User.role == payload.role)
-        if payload.location:
-            query = query.where(User.location == payload.location)
-        result = await db.execute(query)
-        user_ids = list(result.scalars().all())
+        if payload.role_id:
+            query = select(UserRoleAssignment.user_id).where(
+                UserRoleAssignment.role_id == payload.role_id,
+                UserRoleAssignment.status == "active",
+            )
+            if payload.location:
+                query = query.where(UserRoleAssignment.location == payload.location)
+            result = await db.execute(query)
+            user_ids = list(dict.fromkeys(result.scalars().all()))
+        else:
+            query = select(User.id)
+            if payload.location:
+                query = query.where(User.location == payload.location)
+            result = await db.execute(query)
+            user_ids = list(result.scalars().all())
 
     if not user_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No users matched the criteria")
@@ -48,16 +65,19 @@ async def create_assignments(
             training_id=payload.training_id,
             user_id=uid,
             due_date=payload.due_date,
+            assignment_type=payload.assignment_type,
             status="assigned",
         )
         db.add(assignment)
         assignments.append(assignment)
 
+    await db.flush()
+    await sync_user_procedure_compliance(db, user_ids=user_ids)
     await db.commit()
     for a in assignments:
         await db.refresh(a)
 
-    return assignments
+    return [_serialize_assignment(item) for item in assignments]
 
 
 @router.get("", response_model=list[AssignmentOut])
@@ -76,7 +96,8 @@ async def list_assignments(
         query = query.where(Assignment.status == assignment_status)
 
     result = await db.execute(query.order_by(Assignment.due_date.asc().nullslast()))
-    return result.scalars().all()
+    assignments = list(result.scalars().all())
+    return [_serialize_assignment(item) for item in assignments]
 
 
 @router.post("/{assignment_id}/submit", response_model=AssignmentOut)
@@ -124,4 +145,7 @@ async def submit_quiz(
 
     await db.commit()
     await db.refresh(assignment)
-    return assignment
+    await sync_user_procedure_compliance(db, user_ids=[assignment.user_id])
+    await db.commit()
+    await db.refresh(assignment)
+    return _serialize_assignment(assignment)

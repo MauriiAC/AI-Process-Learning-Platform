@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import String, DateTime, ForeignKey, Text, Integer, Float, BigInteger
+from sqlalchemy import String, DateTime, ForeignKey, Text, Integer, Float
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,6 +13,11 @@ class Training(Base):
     __tablename__ = "trainings"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    procedure_version_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("procedure_versions.id", ondelete="CASCADE"),
+        unique=True,
+    )
     title: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(50), default="draft")
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
@@ -22,22 +27,10 @@ class Training(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    assets = relationship("TrainingAsset", back_populates="training", lazy="selectin")
     structure = relationship("TrainingStructure", back_populates="training", uselist=False, lazy="selectin")
-
-
-class TrainingAsset(Base):
-    __tablename__ = "training_assets"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    training_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("trainings.id", ondelete="CASCADE"))
-    type: Mapped[str] = mapped_column(String(50))
-    storage_key: Mapped[str] = mapped_column(String(1000))
-    mime: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-
-    training = relationship("Training", back_populates="assets")
+    procedure_version = relationship("ProcedureVersion", back_populates="training", lazy="selectin")
 
 
 class TrainingTranscript(Base):

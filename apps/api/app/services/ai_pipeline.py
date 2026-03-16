@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import uuid
+from datetime import datetime, timezone
 
 from pydantic import ValidationError
 from sqlalchemy import delete, select, update
@@ -12,21 +13,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session
 from app.models.job import Job
+from app.models.procedure import (
+    ProcedureVersion,
+    ProcedureVersionChunk,
+    ProcedureVersionStructure,
+    ProcedureVersionTranscript,
+)
 from app.models.quiz import QuizQuestion
 from app.models.semantic_segment import SemanticSegment
-from app.models.training import (
-    Training,
-    TrainingAsset,
-    TrainingChunk,
-    TrainingStructure,
-    TrainingTranscript,
-)
+from app.models.training import Training, TrainingStructure
+from app.models.video_frame import VideoFrame
 from app.schemas.generated_content import (
     validate_quiz_question,
     validate_quiz_response,
     validate_training_structure,
 )
-from app.models.video_frame import VideoFrame
 from app.services.ai.provider_factory import get_ai_provider
 from app.services.ai.providers.base import AIProvider, AIProviderError
 from app.services.ai.usage_tracking import clear_ai_usage_context, set_ai_usage_context
@@ -83,16 +84,37 @@ async def _update_job(db: AsyncSession, job_id: uuid.UUID, status: str, progress
     await db.commit()
 
 
-async def _load_existing_training_data(db: AsyncSession, training_id: uuid.UUID):
-    """Load transcript, chunks, frames and semantic segments for iterate. Returns None if any is missing."""
-    r = await db.execute(select(TrainingTranscript).where(TrainingTranscript.training_id == training_id))
+async def _update_source_processing_status(
+    db: AsyncSession,
+    procedure_version_id: uuid.UUID,
+    status: str,
+    error: str | None = None,
+    processed: bool = False,
+):
+    values = {
+        "source_processing_status": status,
+        "source_processing_error": error,
+    }
+    if processed:
+        values["source_processed_at"] = datetime.now(timezone.utc)
+    await db.execute(update(ProcedureVersion).where(ProcedureVersion.id == procedure_version_id).values(**values))
+    await db.commit()
+
+
+async def _load_source_processing_data(db: AsyncSession, procedure_version_id: uuid.UUID):
+    """Load transcript, chunks, frames, segments and structure for a processed procedure version."""
+    r = await db.execute(
+        select(ProcedureVersionTranscript).where(ProcedureVersionTranscript.procedure_version_id == procedure_version_id)
+    )
     transcript_row = r.scalar_one_or_none()
     if not transcript_row:
         return None
     raw_transcript = transcript_row.transcript_raw
 
     r = await db.execute(
-        select(TrainingChunk).where(TrainingChunk.training_id == training_id).order_by(TrainingChunk.chunk_index)
+        select(ProcedureVersionChunk)
+        .where(ProcedureVersionChunk.procedure_version_id == procedure_version_id)
+        .order_by(ProcedureVersionChunk.chunk_index)
     )
     chunks = r.scalars().all()
     if not chunks:
@@ -100,7 +122,7 @@ async def _load_existing_training_data(db: AsyncSession, training_id: uuid.UUID)
     transcript_segments = [{"text": c.text, "start": c.start_time, "end": c.end_time} for c in chunks]
 
     r = await db.execute(
-        select(VideoFrame).where(VideoFrame.training_id == training_id).order_by(VideoFrame.timestamp)
+        select(VideoFrame).where(VideoFrame.procedure_version_id == procedure_version_id).order_by(VideoFrame.timestamp)
     )
     frames = r.scalars().all()
     if not frames:
@@ -111,14 +133,23 @@ async def _load_existing_training_data(db: AsyncSession, training_id: uuid.UUID)
     ]
 
     r = await db.execute(
-        select(SemanticSegment).where(SemanticSegment.training_id == training_id).order_by(SemanticSegment.start_time)
+        select(SemanticSegment)
+        .where(SemanticSegment.procedure_version_id == procedure_version_id)
+        .order_by(SemanticSegment.start_time)
     )
     sem = r.scalars().all()
     if not sem:
         return None
     segments = [{"start": s.start_time, "end": s.end_time, "text_fused": s.text_fused} for s in sem]
 
-    return (transcript_segments, frames_data, segments, raw_transcript)
+    r = await db.execute(
+        select(ProcedureVersionStructure).where(ProcedureVersionStructure.procedure_version_id == procedure_version_id)
+    )
+    structure_row = r.scalar_one_or_none()
+    if not structure_row:
+        return None
+
+    return (transcript_segments, frames_data, segments, raw_transcript, structure_row.structure_json)
 
 
 async def _load_existing_quiz_context(db: AsyncSession, training_id: uuid.UUID) -> list[dict]:
@@ -169,187 +200,230 @@ def _validate_structure_for_persistence(structure: dict) -> dict:
         raise ValueError(f"Generated training structure did not match expected schema: {exc}") from exc
 
 
-async def run_pipeline(training_id: uuid.UUID, job_id: uuid.UUID, instruction: str | None = None):
+async def run_source_processing(procedure_version_id: uuid.UUID):
+    async with async_session() as db:
+        try:
+            provider = get_ai_provider()
+            result = await db.execute(select(ProcedureVersion).where(ProcedureVersion.id == procedure_version_id))
+            version = result.scalar_one_or_none()
+            if not version:
+                return
+            if not version.source_storage_key:
+                await _update_source_processing_status(
+                    db,
+                    procedure_version_id,
+                    "FAILED",
+                    error="No video asset found",
+                )
+                return
+
+            await _update_source_processing_status(db, procedure_version_id, "TRANSCRIBING")
+            with tempfile.TemporaryDirectory() as tmpdir:
+                video_path = os.path.join(tmpdir, "video.mp4")
+                await download_file(version.source_storage_key, video_path)
+
+                await db.execute(delete(VideoFrame).where(VideoFrame.procedure_version_id == procedure_version_id))
+                await db.execute(delete(SemanticSegment).where(SemanticSegment.procedure_version_id == procedure_version_id))
+                await db.execute(
+                    delete(ProcedureVersionChunk).where(
+                        ProcedureVersionChunk.procedure_version_id == procedure_version_id
+                    )
+                )
+                await db.execute(
+                    delete(ProcedureVersionTranscript).where(
+                        ProcedureVersionTranscript.procedure_version_id == procedure_version_id
+                    )
+                )
+                await db.execute(
+                    delete(ProcedureVersionStructure).where(
+                        ProcedureVersionStructure.procedure_version_id == procedure_version_id
+                    )
+                )
+                await db.commit()
+
+                set_ai_usage_context(stage="TRANSCRIBING")
+                transcript_segments = await _stage_transcribe(provider, video_path)
+                raw_transcript = " ".join(s["text"] for s in transcript_segments)
+
+                db.add(
+                    ProcedureVersionTranscript(
+                        procedure_version_id=procedure_version_id,
+                        transcript_raw=raw_transcript,
+                        language="auto",
+                    )
+                )
+
+                for i, seg in enumerate(transcript_segments):
+                    db.add(
+                        ProcedureVersionChunk(
+                            procedure_version_id=procedure_version_id,
+                            chunk_index=i,
+                            text=seg["text"],
+                            start_time=seg["start"],
+                            end_time=seg["end"],
+                        )
+                    )
+                await db.commit()
+                await _update_source_processing_status(db, procedure_version_id, "CHUNKING")
+
+                set_ai_usage_context(stage="CHUNKING")
+                frames_data = await _stage_frame_sampling(provider, video_path, tmpdir, procedure_version_id)
+                for fd in frames_data:
+                    db.add(
+                        VideoFrame(
+                            procedure_version_id=procedure_version_id,
+                            timestamp=fd["timestamp"],
+                            storage_key=fd["storage_key"],
+                            caption=fd["caption"],
+                        )
+                    )
+                    await upload_file(fd["local_path"], fd["storage_key"])
+                await db.commit()
+                await _update_source_processing_status(db, procedure_version_id, "INDEXING")
+
+                segments = _stage_build_segments(transcript_segments, frames_data)
+                set_ai_usage_context(stage="INDEXING")
+                for seg in segments:
+                    emb = await provider.embed_text(seg["text_fused"])
+                    db.add(
+                        SemanticSegment(
+                            procedure_version_id=procedure_version_id,
+                            start_time=seg["start"],
+                            end_time=seg["end"],
+                            text_fused=seg["text_fused"],
+                            embedding=emb,
+                        )
+                    )
+                await db.commit()
+
+                await _update_source_processing_status(db, procedure_version_id, "EXTRACTING")
+                set_ai_usage_context(stage="EXTRACTING")
+                structure = _validate_structure_for_persistence(await _stage_extract_knowledge(provider, segments))
+                db.add(
+                    ProcedureVersionStructure(
+                        procedure_version_id=procedure_version_id,
+                        structure_json=structure,
+                    )
+                )
+
+                embedding_text = "\n".join(
+                    part
+                    for part in [
+                        version.content_text or "",
+                        raw_transcript[:4000],
+                        json.dumps(structure, ensure_ascii=False)[:4000],
+                    ]
+                    if part
+                )
+                if embedding_text.strip():
+                    version.embedding = await provider.embed_text(embedding_text)
+                version.source_processing_status = "READY"
+                version.source_processing_error = None
+                version.source_processed_at = datetime.now(timezone.utc)
+                await db.commit()
+
+        except AIProviderError as e:
+            logger.exception("Source processing provider error for procedure version %s", procedure_version_id)
+            async with async_session() as err_db:
+                await _update_source_processing_status(
+                    err_db,
+                    procedure_version_id,
+                    "FAILED",
+                    error=_map_provider_error(e),
+                )
+        except Exception as e:
+            logger.exception("Source processing failed for procedure version %s", procedure_version_id)
+            async with async_session() as err_db:
+                await _update_source_processing_status(err_db, procedure_version_id, "FAILED", error=str(e))
+        finally:
+            clear_ai_usage_context()
+
+
+async def run_training_generation(training_id: uuid.UUID, job_id: uuid.UUID, instruction: str | None = None):
     async with async_session() as db:
         try:
             provider = get_ai_provider()
             set_ai_usage_context(training_id=training_id)
 
-            # Optimized path for iterate: reuse existing transcript, frames, segments; only re-run AI stages that use instruction
-            if instruction is not None:
-                loaded = await _load_existing_training_data(db, training_id)
-                if loaded is not None:
-                    _transcript_segments, _frames_data, segments, raw_transcript = loaded
-                    existing_quiz = await _load_existing_quiz_context(db, training_id)
-                    await _update_job(db, job_id, "EXTRACTING", 45)
-
-                    set_ai_usage_context(stage="EXTRACTING")
-                    structure = _validate_structure_for_persistence(
-                        await _stage_extract_knowledge(provider, segments, instruction)
-                    )
-                    existing_struct = await db.execute(
-                        select(TrainingStructure).where(TrainingStructure.training_id == training_id)
-                    )
-                    es = existing_struct.scalar_one_or_none()
-                    if es:
-                        es.structure_json = structure
-                    else:
-                        db.add(TrainingStructure(training_id=training_id, structure_json=structure))
-                    await db.commit()
-                    await _update_job(db, job_id, "PLANNING", 65)
-
-                    set_ai_usage_context(stage="PLANNING")
-                    coverage_plan = await _stage_coverage_plan(provider, structure, segments)
-                    await _update_job(db, job_id, "GENERATING_QUIZ", 75)
-
-                    set_ai_usage_context(stage="GENERATING_QUIZ")
-                    questions = await _stage_generate_quiz(
-                        provider,
-                        coverage_plan,
-                        segments,
-                        instruction,
-                        existing_quiz=existing_quiz,
-                    )
-                    await _update_job(db, job_id, "VERIFYING", 85)
-
-                    verified_questions = _prepare_questions_for_persistence(
-                        await _stage_verify(questions, raw_transcript, segments)
-                    )
-
-                    await db.execute(delete(QuizQuestion).where(QuizQuestion.training_id == training_id))
-                    for q in verified_questions:
-                        db.add(QuizQuestion(training_id=training_id, question_json=q))
-                    await db.commit()
-
-                    await db.execute(
-                        update(Training).where(Training.id == training_id).values(status="ready")
-                    )
-                    await db.commit()
-                    await _update_job(db, job_id, "READY", 100)
-                    return
-
-            await _update_job(db, job_id, "TRANSCRIBING", 10)
-            result = await db.execute(
-                select(TrainingAsset).where(
-                    TrainingAsset.training_id == training_id,
-                    TrainingAsset.type == "video",
+            result = await db.execute(select(Training).where(Training.id == training_id))
+            training = result.scalar_one_or_none()
+            if not training or not training.procedure_version:
+                await _update_job(db, job_id, "FAILED", 0, error="Training has no source procedure version")
+                return
+            if training.procedure_version.source_processing_status != "READY":
+                await _update_job(
+                    db,
+                    job_id,
+                    "FAILED",
+                    0,
+                    error="Procedure version source artifacts are not ready",
                 )
-            )
-            asset = result.scalar_one_or_none()
-            if not asset:
-                await _update_job(db, job_id, "FAILED", 0, error="No video asset found")
                 return
 
-            with tempfile.TemporaryDirectory() as tmpdir:
-                video_path = os.path.join(tmpdir, "video.mp4")
-                await download_file(asset.storage_key, video_path)
+            loaded = await _load_source_processing_data(db, training.procedure_version_id)
+            if loaded is None:
+                await _update_job(db, job_id, "FAILED", 0, error="Missing source artifacts for procedure version")
+                return
 
-                # Stage 1: Transcription
-                set_ai_usage_context(stage="TRANSCRIBING")
-                transcript_segments = await _stage_transcribe(provider, video_path)
-                raw_transcript = " ".join(s["text"] for s in transcript_segments)
+            _transcript_segments, _frames_data, segments, raw_transcript, source_structure = loaded
+            existing_quiz = await _load_existing_quiz_context(db, training_id)
 
-                existing = await db.execute(
-                    select(TrainingTranscript).where(TrainingTranscript.training_id == training_id)
-                )
-                if existing.scalar_one_or_none() is None:
-                    db.add(TrainingTranscript(
-                        training_id=training_id,
-                        transcript_raw=raw_transcript,
-                        language="auto",
-                    ))
-
-                chunks = []
-                for i, seg in enumerate(transcript_segments):
-                    chunk = TrainingChunk(
-                        training_id=training_id,
-                        chunk_index=i,
-                        text=seg["text"],
-                        start_time=seg["start"],
-                        end_time=seg["end"],
-                    )
-                    chunks.append(chunk)
-                    db.add(chunk)
+            if instruction is None:
+                await db.execute(delete(TrainingStructure).where(TrainingStructure.training_id == training_id))
+                await db.execute(delete(QuizQuestion).where(QuizQuestion.training_id == training_id))
                 await db.commit()
-                await _update_job(db, job_id, "CHUNKING", 20)
 
-                # Stage 2: Frame Sampling + Captioning
-                set_ai_usage_context(stage="CHUNKING")
-                frames_data = await _stage_frame_sampling(provider, video_path, tmpdir, training_id)
-                for fd in frames_data:
-                    db.add(VideoFrame(
-                        training_id=training_id,
-                        timestamp=fd["timestamp"],
-                        storage_key=fd["storage_key"],
-                        caption=fd["caption"],
-                    ))
-                    await upload_file(fd["local_path"], fd["storage_key"])
-                await db.commit()
-                await _update_job(db, job_id, "CHUNKING", 35)
+            await _update_job(db, job_id, "EXTRACTING", 45)
+            existing_structure_row = await db.execute(
+                select(TrainingStructure).where(TrainingStructure.training_id == training_id)
+            )
+            existing_structure = existing_structure_row.scalar_one_or_none()
+            base_structure = existing_structure.structure_json if existing_structure else source_structure
 
-                # Stage 3: Segment Builder
-                segments = _stage_build_segments(transcript_segments, frames_data)
-                await _update_job(db, job_id, "EXTRACTING", 45)
-
-                # Stage 4: Embeddings
-                set_ai_usage_context(stage="INDEXING")
-                semantic_segment_records = []
-                for seg in segments:
-                    emb = await provider.embed_text(seg["text_fused"])
-                    record = SemanticSegment(
-                        training_id=training_id,
-                        start_time=seg["start"],
-                        end_time=seg["end"],
-                        text_fused=seg["text_fused"],
-                        embedding=emb,
-                    )
-                    db.add(record)
-                    semantic_segment_records.append(record)
-                await db.commit()
-                await _update_job(db, job_id, "INDEXING", 55)
-
-                # Stage 5: Knowledge Extraction
+            if instruction is not None:
                 set_ai_usage_context(stage="EXTRACTING")
                 structure = _validate_structure_for_persistence(
-                    await _stage_extract_knowledge(provider, segments, instruction)
+                    await _stage_extract_knowledge(
+                        provider,
+                        segments,
+                        instruction=instruction,
+                        existing_structure=base_structure,
+                    )
                 )
-                existing_struct = await db.execute(
-                    select(TrainingStructure).where(TrainingStructure.training_id == training_id)
-                )
-                es = existing_struct.scalar_one_or_none()
-                if es:
-                    es.structure_json = structure
-                else:
-                    db.add(TrainingStructure(training_id=training_id, structure_json=structure))
-                await db.commit()
-                await _update_job(db, job_id, "PLANNING", 65)
+            else:
+                structure = _validate_structure_for_persistence(base_structure)
 
-                # Stage 6: Coverage Planning
-                set_ai_usage_context(stage="PLANNING")
-                coverage_plan = await _stage_coverage_plan(provider, structure, segments)
-                await _update_job(db, job_id, "GENERATING_QUIZ", 75)
+            if existing_structure:
+                existing_structure.structure_json = structure
+            else:
+                db.add(TrainingStructure(training_id=training_id, structure_json=structure))
+            await db.commit()
 
-                # Stage 7: Quiz Generation
-                set_ai_usage_context(stage="GENERATING_QUIZ")
-                questions = await _stage_generate_quiz(provider, coverage_plan, segments, instruction)
-                await _update_job(db, job_id, "VERIFYING", 85)
+            await _update_job(db, job_id, "PLANNING", 65)
+            set_ai_usage_context(stage="PLANNING")
+            coverage_plan = await _stage_coverage_plan(provider, structure, segments)
 
-                # Stage 8: Verification
-                verified_questions = _prepare_questions_for_persistence(
-                    await _stage_verify(questions, raw_transcript, segments)
-                )
+            await _update_job(db, job_id, "GENERATING_QUIZ", 75)
+            set_ai_usage_context(stage="GENERATING_QUIZ")
+            questions = await _stage_generate_quiz(
+                provider,
+                coverage_plan,
+                segments,
+                instruction,
+                existing_quiz=existing_quiz,
+            )
 
-                await db.execute(delete(QuizQuestion).where(QuizQuestion.training_id == training_id))
-                for q in verified_questions:
-                    db.add(QuizQuestion(training_id=training_id, question_json=q))
-                await db.commit()
+            await _update_job(db, job_id, "VERIFYING", 85)
+            verified_questions = _prepare_questions_for_persistence(
+                await _stage_verify(questions, raw_transcript, segments)
+            )
 
-                # Stage 9: Mark ready
-                await db.execute(
-                    update(Training).where(Training.id == training_id).values(status="ready")
-                )
-                await db.commit()
-                await _update_job(db, job_id, "READY", 100)
+            await db.execute(delete(QuizQuestion).where(QuizQuestion.training_id == training_id))
+            for q in verified_questions:
+                db.add(QuizQuestion(training_id=training_id, question_json=q))
+            await db.execute(update(Training).where(Training.id == training_id).values(status="ready"))
+            await db.commit()
+            await _update_job(db, job_id, "READY", 100)
 
         except AIProviderError as e:
             logger.exception("Pipeline provider error for training %s", training_id)
@@ -361,7 +435,6 @@ async def run_pipeline(training_id: uuid.UUID, job_id: uuid.UUID, instruction: s
                 await _update_job(err_db, job_id, "FAILED", 0, error=str(e))
         finally:
             clear_ai_usage_context()
-
 
 def _map_provider_error(error: AIProviderError) -> str:
     if error.code == "quota_exceeded":
@@ -378,7 +451,7 @@ async def _stage_transcribe(provider: AIProvider, video_path: str) -> list[dict]
 
 
 async def _stage_frame_sampling(
-    provider: AIProvider, video_path: str, tmpdir: str, training_id: uuid.UUID
+    provider: AIProvider, video_path: str, tmpdir: str, procedure_version_id: uuid.UUID
 ) -> list[dict]:
     import subprocess
 
@@ -426,7 +499,7 @@ async def _stage_frame_sampling(
             "Be factual and concise. Respond in Spanish.",
         )
 
-        storage_key = f"frames/{training_id}/{fname}"
+        storage_key = f"frames/{procedure_version_id}/{fname}"
         frames_data.append({
             "timestamp": float(timestamp),
             "caption": caption,
@@ -478,7 +551,10 @@ def _stage_build_segments(transcript_segments: list[dict], frames_data: list[dic
 
 
 async def _stage_extract_knowledge(
-    provider: AIProvider, segments: list[dict], instruction: str | None = None
+    provider: AIProvider,
+    segments: list[dict],
+    instruction: str | None = None,
+    existing_structure: dict | None = None,
 ) -> dict:
     segments_text = "\n\n".join(
         f"[{s['start']:.0f}s - {s['end']:.0f}s]: {s['text_fused']}" for s in segments
@@ -490,12 +566,23 @@ async def _stage_extract_knowledge(
         "critical_points (list of {point, why, segment_ref}). All segment_ref should be the time range like '10s-20s'. "
         "Respond ONLY with valid JSON. Respond in Spanish."
     )
+    if existing_structure:
+        system_prompt += (
+            "\n\nThere is an existing structure for this procedure version/training revision. "
+            "Use it as baseline and only adjust it when the instruction requires a pedagogical rewrite."
+        )
     if instruction:
         system_prompt += f"\n\nAdditional instruction from the author: {instruction}"
 
     return await provider.generate_json(
         system_prompt=system_prompt,
-        user_prompt=segments_text,
+        user_prompt=json.dumps(
+            {
+                "existing_structure": existing_structure,
+                "segments": segments_text,
+            },
+            ensure_ascii=False,
+        ),
         temperature=0.3,
     )
 

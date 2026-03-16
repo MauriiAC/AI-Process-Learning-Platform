@@ -4,9 +4,14 @@ from pydantic import BaseModel
 
 
 class SearchResult(BaseModel):
-    training_id: uuid.UUID
-    training_title: str
+    procedure_id: uuid.UUID
+    procedure_version_id: uuid.UUID
+    procedure_code: str
+    procedure_title: str
+    version_number: int
+    training_id: uuid.UUID | None = None
+    training_title: str | None = None
     snippet: str
-    start_time: float
-    end_time: float
+    start_time: float | None = None
+    end_time: float | None = None
     score: float

@@ -30,6 +30,11 @@ interface Training {
   title: string;
 }
 
+interface Role {
+  id: string;
+  name: string;
+}
+
 const statusConfig: Record<string, { label: string; color: string; icon: typeof Clock }> = {
   assigned: { label: "Asignada", color: "bg-blue-100 text-blue-800", icon: Clock },
   in_progress: { label: "En progreso", color: "bg-yellow-100 text-yellow-800", icon: Clock },
@@ -40,7 +45,13 @@ const statusConfig: Record<string, { label: string; color: string; icon: typeof 
 export default function AssignmentsPage() {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ training_id: "", user_ids: "", due_date: "" });
+  const [form, setForm] = useState({
+    training_id: "",
+    user_ids: "",
+    due_date: "",
+    role_id: "",
+    assignment_type: "training",
+  });
 
   const { data: assignments, isLoading } = useQuery<Assignment[]>({
     queryKey: ["assignments"],
@@ -52,13 +63,31 @@ export default function AssignmentsPage() {
     queryFn: () => api.get("/trainings").then((r) => r.data),
   });
 
+  const { data: roles } = useQuery<Role[]>({
+    queryKey: ["roles"],
+    queryFn: () => api.get("/roles").then((r) => r.data),
+  });
+
   const createMutation = useMutation({
-    mutationFn: (payload: { training_id: string; user_ids: string[]; due_date?: string }) =>
+    mutationFn: (payload: {
+      training_id: string;
+      user_ids?: string[];
+      role_id?: string;
+      due_date?: string;
+      assignment_type: string;
+    }) =>
       api.post("/assignments", payload).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["compliance"] });
       setShowModal(false);
-      setForm({ training_id: "", user_ids: "", due_date: "" });
+      setForm({
+        training_id: "",
+        user_ids: "",
+        due_date: "",
+        role_id: "",
+        assignment_type: "training",
+      });
     },
   });
 
@@ -70,8 +99,10 @@ export default function AssignmentsPage() {
       .filter(Boolean);
     createMutation.mutate({
       training_id: form.training_id,
-      user_ids,
+      user_ids: user_ids.length ? user_ids : undefined,
+      role_id: form.role_id || undefined,
       due_date: form.due_date || undefined,
+      assignment_type: form.assignment_type,
     });
   }
 
@@ -197,12 +228,37 @@ export default function AssignmentsPage() {
                 </span>
                 <input
                   type="text"
-                  required
                   value={form.user_ids}
                   onChange={(e) => setForm((f) => ({ ...f, user_ids: e.target.value }))}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                   placeholder="user-1, user-2"
                 />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">O asignar por rol</span>
+                <select
+                  value={form.role_id}
+                  onChange={(e) => setForm((f) => ({ ...f, role_id: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                >
+                  <option value="">Sin rol</option>
+                  {roles?.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">Tipo de asignación</span>
+                <select
+                  value={form.assignment_type}
+                  onChange={(e) => setForm((f) => ({ ...f, assignment_type: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                >
+                  <option value="training">Training</option>
+                  <option value="compliance">Compliance obligation</option>
+                </select>
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-gray-700">

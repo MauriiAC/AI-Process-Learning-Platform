@@ -7,6 +7,11 @@ import {
   BarChart3,
   CheckSquare,
   AlertTriangle,
+  GitBranch,
+  BriefcaseBusiness,
+  Users,
+  ShieldCheck,
+  Radar,
   LogOut,
   Menu,
   X,
@@ -14,12 +19,17 @@ import {
 import { useState } from "react";
 
 const navItems = [
-  { to: "/trainings", label: "Capacitaciones", icon: BookOpen },
-  { to: "/search", label: "Buscar", icon: Search },
-  { to: "/assignments", label: "Asignaciones", icon: ClipboardList },
   { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
+  { to: "/procedures", label: "Procedimientos", icon: GitBranch },
+  { to: "/roles", label: "Roles", icon: BriefcaseBusiness },
+  { to: "/users", label: "Usuarios", icon: Users },
+  { to: "/compliance", label: "Compliance", icon: ShieldCheck },
+  { to: "/trainings", label: "Trainings", icon: BookOpen },
+  { to: "/assignments", label: "Asignaciones", icon: ClipboardList },
+  { to: "/change-events", label: "Change Events", icon: Radar },
   { to: "/tasks", label: "Tareas", icon: CheckSquare },
   { to: "/incidents", label: "Incidentes", icon: AlertTriangle },
+  { to: "/search", label: "Buscar", icon: Search },
 ];
 
 export default function Layout() {
@@ -47,8 +57,8 @@ export default function Layout() {
         }`}
       >
         <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-6">
-          <BookOpen className="h-6 w-6 text-indigo-600" />
-          <span className="text-lg font-bold text-gray-900">MiniTraining</span>
+          <GitBranch className="h-6 w-6 text-indigo-600" />
+          <span className="text-lg font-bold text-gray-900">ProcedureOps</span>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">

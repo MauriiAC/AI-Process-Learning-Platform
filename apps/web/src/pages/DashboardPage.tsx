@@ -7,13 +7,21 @@ import {
   AlertTriangle,
   Loader2,
   TrendingUp,
+  GitBranch,
+  BriefcaseBusiness,
+  ShieldAlert,
+  Radar,
 } from "lucide-react";
 
 interface DashboardData {
   total_trainings: number;
+  total_procedures: number;
+  total_roles: number;
   completion_rate: number;
   average_score: number;
   overdue_count: number;
+  compliance_gap_count: number;
+  open_change_events: number;
 }
 
 export default function DashboardPage() {
@@ -32,25 +40,39 @@ export default function DashboardPage() {
 
   const stats = [
     {
-      label: "Total Capacitaciones",
-      value: data?.total_trainings ?? 0,
-      icon: BookOpen,
+      label: "Procedimientos",
+      value: data?.total_procedures ?? 0,
+      icon: GitBranch,
       color: "bg-indigo-50 text-indigo-600",
       ring: "ring-indigo-500/20",
     },
     {
-      label: "Tasa de Finalización",
+      label: "Roles activos",
+      value: data?.total_roles ?? 0,
+      icon: BriefcaseBusiness,
+      color: "bg-sky-50 text-sky-600",
+      ring: "ring-sky-500/20",
+    },
+    {
+      label: "Trainings",
+      value: data?.total_trainings ?? 0,
+      icon: BookOpen,
+      color: "bg-blue-50 text-blue-600",
+      ring: "ring-blue-500/20",
+    },
+    {
+      label: "Cumplimiento",
       value: `${(data?.completion_rate ?? 0).toFixed(0)}%`,
       icon: CheckCircle2,
       color: "bg-green-50 text-green-600",
       ring: "ring-green-500/20",
     },
     {
-      label: "Puntaje Promedio",
-      value: `${(data?.average_score ?? 0).toFixed(0)}%`,
-      icon: TrendingUp,
-      color: "bg-blue-50 text-blue-600",
-      ring: "ring-blue-500/20",
+      label: "Brechas de compliance",
+      value: data?.compliance_gap_count ?? 0,
+      icon: ShieldAlert,
+      color: "bg-amber-50 text-amber-600",
+      ring: "ring-amber-500/20",
     },
     {
       label: "Asignaciones Vencidas",
@@ -58,6 +80,20 @@ export default function DashboardPage() {
       icon: AlertTriangle,
       color: "bg-red-50 text-red-600",
       ring: "ring-red-500/20",
+    },
+    {
+      label: "Change Events abiertos",
+      value: data?.open_change_events ?? 0,
+      icon: Radar,
+      color: "bg-fuchsia-50 text-fuchsia-600",
+      ring: "ring-fuchsia-500/20",
+    },
+    {
+      label: "Puntaje Promedio",
+      value: `${(data?.average_score ?? 0).toFixed(0)}%`,
+      icon: TrendingUp,
+      color: "bg-emerald-50 text-emerald-600",
+      ring: "ring-emerald-500/20",
     },
   ];
 
@@ -99,8 +135,11 @@ export default function DashboardPage() {
         </div>
         <p className="mt-2 text-sm text-gray-500">
           El sistema cuenta con{" "}
-          <span className="font-medium text-gray-700">{data?.total_trainings ?? 0}</span>{" "}
-          capacitaciones creadas. La tasa de finalización es del{" "}
+          <span className="font-medium text-gray-700">{data?.total_procedures ?? 0}</span>{" "}
+          procedimientos,{" "}
+          <span className="font-medium text-gray-700">{data?.total_roles ?? 0}</span> roles y{" "}
+          <span className="font-medium text-gray-700">{data?.total_trainings ?? 0}</span> trainings
+          derivados. La tasa de cumplimiento es del{" "}
           <span className="font-medium text-gray-700">
             {(data?.completion_rate ?? 0).toFixed(0)}%
           </span>{" "}
@@ -108,7 +147,11 @@ export default function DashboardPage() {
           <span className="font-medium text-gray-700">
             {(data?.average_score ?? 0).toFixed(0)}%
           </span>
-          .
+          . Hay{" "}
+          <span className="font-medium text-gray-700">{data?.open_change_events ?? 0}</span>{" "}
+          change events abiertos y{" "}
+          <span className="font-medium text-gray-700">{data?.compliance_gap_count ?? 0}</span>{" "}
+          brechas de compliance detectadas.
           {(data?.overdue_count ?? 0) > 0 && (
             <span className="text-red-600">
               {" "}

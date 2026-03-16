@@ -8,6 +8,9 @@ interface Training {
   title: string;
   status: string;
   created_at: string;
+  summary?: string | null;
+  procedure_code?: string | null;
+  version_number?: number | null;
 }
 
 const statusLabel: Record<string, { text: string; color: string }> = {
@@ -45,15 +48,15 @@ export default function TrainingsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Capacitaciones</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Gestiona tus mini-capacitaciones generadas con IA
+            Artefactos derivados para desplegar y verificar procedimientos versionados
           </p>
         </div>
         <Link
-          to="/trainings/new"
+          to="/procedures"
           className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
         >
           <Plus className="h-4 w-4" />
-          Nueva Capacitación
+          Ir a procedimientos
         </Link>
       </div>
 
@@ -66,14 +69,14 @@ export default function TrainingsPage() {
           <BookOpen className="mx-auto h-10 w-10 text-gray-300" />
           <p className="mt-3 text-sm font-medium text-gray-600">No hay capacitaciones aún</p>
           <p className="mt-1 text-sm text-gray-400">
-            Crea tu primera capacitación subiendo un video
+            Crea una versión de procedimiento y genera su training derivado
           </p>
           <Link
-            to="/trainings/new"
+            to="/procedures"
             className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
           >
             <Plus className="h-4 w-4" />
-            Crear capacitación
+            Ir a procedimientos
           </Link>
         </div>
       ) : (
@@ -91,6 +94,7 @@ export default function TrainingsPage() {
               >
                 <Link to={`/trainings/${t.id}`} className="min-w-0 flex-1">
                   <h3 className="truncate text-sm font-semibold text-gray-900">{t.title}</h3>
+                  {t.summary && <p className="mt-1 truncate text-xs text-gray-500">{t.summary}</p>}
                   <div className="mt-1.5 flex items-center gap-3">
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${badge.color}`}
@@ -102,6 +106,13 @@ export default function TrainingsPage() {
                       {new Date(t.created_at).toLocaleDateString("es-AR")}
                     </span>
                   </div>
+                  {t.procedure_code && t.version_number != null && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                        {t.procedure_code} · v{t.version_number}
+                      </span>
+                    </div>
+                  )}
                 </Link>
                 <div className="ml-4 flex items-center gap-2">
                   <Link to={`/trainings/${t.id}`} className="text-xs text-gray-400">

@@ -9,6 +9,14 @@ import AssignmentsPage from "./pages/AssignmentsPage";
 import DashboardPage from "./pages/DashboardPage";
 import IncidentsPage from "./pages/IncidentsPage";
 import TasksPage from "./pages/TasksPage";
+import TaskDetailPage from "./pages/TaskDetailPage";
+import ProceduresPage from "./pages/ProceduresPage";
+import ProcedureDetailPage from "./pages/ProcedureDetailPage";
+import RolesPage from "./pages/RolesPage";
+import RoleDetailPage from "./pages/RoleDetailPage";
+import UsersPage from "./pages/UsersPage";
+import CompliancePage from "./pages/CompliancePage";
+import ChangeEventsPage from "./pages/ChangeEventsPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated() ? <>{children}</> : <Navigate to="/login" />;
@@ -26,15 +34,22 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/trainings" />} />
+        <Route index element={<Navigate to="/dashboard" />} />
+        <Route path="procedures" element={<ProceduresPage />} />
+        <Route path="procedures/:id" element={<ProcedureDetailPage />} />
+        <Route path="roles" element={<RolesPage />} />
+        <Route path="roles/:id" element={<RoleDetailPage />} />
+        <Route path="users" element={<UsersPage />} />
+        <Route path="compliance" element={<CompliancePage />} />
+        <Route path="change-events" element={<ChangeEventsPage />} />
         <Route path="trainings" element={<TrainingsPage />} />
-        <Route path="trainings/new" element={<TrainingBuilderPage />} />
         <Route path="trainings/:id" element={<TrainingBuilderPage />} />
         <Route path="search" element={<SearchPage />} />
         <Route path="assignments" element={<AssignmentsPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="incidents" element={<IncidentsPage />} />
         <Route path="tasks" element={<TasksPage />} />
+        <Route path="tasks/:id" element={<TaskDetailPage />} />
       </Route>
     </Routes>
   );

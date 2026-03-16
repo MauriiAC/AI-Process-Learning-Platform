@@ -134,16 +134,14 @@ class QuizEvidence(BaseModel):
         return value
 
 
-class GeneratedQuizQuestion(BaseModel):
+class QuizQuestionContent(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    type: Literal["mcq"]
+    type: Literal["mcq"] = "mcq"
     question: str = Field(min_length=1)
-    options: list[str] = Field(min_length=4, max_length=4)
+    options: list[str] = Field(min_length=2, max_length=4)
     correct_answer: int
-    evidence: QuizEvidence
-    verified: bool = False
-    position: int | None = None
+    evidence: QuizEvidence | None = None
 
     @field_validator("question")
     @classmethod
@@ -170,6 +168,17 @@ class GeneratedQuizQuestion(BaseModel):
     def _validate_answer(self):
         if not 0 <= self.correct_answer < len(self.options):
             raise ValueError("correct_answer must reference an option index")
+        return self
+
+
+class GeneratedQuizQuestion(QuizQuestionContent):
+    model_config = ConfigDict(extra="ignore")
+
+    verified: bool = False
+    position: int | None = None
+
+    @model_validator(mode="after")
+    def _validate_metadata(self):
         if self.position is not None and self.position < 1:
             raise ValueError("position must be >= 1")
         return self
@@ -194,6 +203,7 @@ def validate_quiz_response(payload: dict) -> dict:
 
 
 __all__ = [
+    "QuizQuestionContent",
     "GeneratedQuizQuestion",
     "GeneratedQuizResponse",
     "GeneratedTrainingStructure",

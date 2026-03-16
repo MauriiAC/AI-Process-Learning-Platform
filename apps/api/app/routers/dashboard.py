@@ -1,12 +1,15 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select, case
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.assignment import Assignment
+from app.models.change_event import ChangeEvent
 from app.models.incident import Incident, IncidentTrainingLink
+from app.models.procedure import Procedure, UserProcedureCompliance
+from app.models.role import Role
 from app.models.training import Training
 from app.schemas.dashboard import DashboardStats
 
@@ -17,6 +20,8 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 async def get_dashboard(db: AsyncSession = Depends(get_db)):
     total_trainings_result = await db.execute(select(func.count(Training.id)))
     total_trainings = total_trainings_result.scalar() or 0
+    total_procedures = (await db.execute(select(func.count(Procedure.id)))).scalar() or 0
+    total_roles = (await db.execute(select(func.count(Role.id)))).scalar() or 0
 
     total_assignments_result = await db.execute(select(func.count(Assignment.id)))
     total_assignments = total_assignments_result.scalar() or 0
@@ -46,6 +51,14 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         )
     )
     overdue_count = overdue_result.scalar() or 0
+    compliance_gap_count = (
+        await db.execute(
+            select(func.count(UserProcedureCompliance.id)).where(UserProcedureCompliance.status != "compliant")
+        )
+    ).scalar() or 0
+    open_change_events = (
+        await db.execute(select(func.count(ChangeEvent.id)).where(ChangeEvent.status != "closed"))
+    ).scalar() or 0
 
     top_incidents_query = (
         select(
@@ -74,9 +87,13 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
 
     return DashboardStats(
         total_trainings=total_trainings,
+        total_procedures=total_procedures,
+        total_roles=total_roles,
         total_assignments=total_assignments,
         completion_rate=completion_rate,
         average_score=average_score,
         overdue_count=overdue_count,
+        compliance_gap_count=compliance_gap_count,
+        open_change_events=open_change_events,
         top_incidents=top_incidents,
     )

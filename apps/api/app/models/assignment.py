@@ -15,6 +15,7 @@ class Assignment(Base):
     training_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("trainings.id", ondelete="CASCADE"))
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
     due_date: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    assignment_type: Mapped[str] = mapped_column(String(50), default="training")
     status: Mapped[str] = mapped_column(String(50), default="assigned")
     score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)

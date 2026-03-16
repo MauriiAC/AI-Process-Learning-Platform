@@ -2,7 +2,7 @@ import uuid
 
 from pydantic import BaseModel
 
-from app.schemas.generated_content import GeneratedQuizQuestion
+from app.schemas.generated_content import GeneratedQuizQuestion, QuizQuestionContent
 
 
 class QuizQuestionOut(BaseModel):
@@ -11,6 +11,14 @@ class QuizQuestionOut(BaseModel):
     question_json: GeneratedQuizQuestion
 
     model_config = {"from_attributes": True}
+
+
+class QuizQuestionWrite(BaseModel):
+    question_json: QuizQuestionContent
+
+
+class QuizQuestionUpdate(BaseModel):
+    question_json: QuizQuestionContent
 
 
 class QuizSubmission(BaseModel):

@@ -1,0 +1,14 @@
+---
+description: Project is pre-productive, so backward compatibility is not required by default
+alwaysApply: true
+---
+
+# Pre-Productive Project
+
+- This project is still pre-productivo.
+- By default, prioritize clean domain design, simple APIs, and code clarity over backward compatibility.
+- Do not preserve legacy fields, deprecated payloads, transitional adapters, or compatibility shims unless the user explicitly asks for them.
+- When a cleaner breaking change is available, prefer the breaking change.
+- Prefer removing stale patterns instead of supporting both old and new approaches in parallel.
+- Migrations may assume internal schemas can be cleaned up aggressively, as long as the current codebase stays consistent.
+- If the user later says the project is already productivo, stop applying this rule.

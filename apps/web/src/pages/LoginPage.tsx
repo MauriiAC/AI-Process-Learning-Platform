@@ -7,7 +7,7 @@ import { BookOpen, Loader2 } from "lucide-react";
 export default function LoginPage() {
   const navigate = useNavigate();
   const [isRegister, setIsRegister] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "", location: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", location: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -26,7 +26,6 @@ export default function LoginPage() {
           name: form.name,
           email: form.email,
           password: form.password,
-          role: form.role || undefined,
           location: form.location || undefined,
         });
         storeAuth(data.access_token, data.user);
@@ -77,16 +76,6 @@ export default function LoginPage() {
                   onChange={(e) => set("name", e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                   placeholder="Tu nombre completo"
-                />
-              </label>
-              <label className="mb-4 block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Rol</span>
-                <input
-                  type="text"
-                  value={form.role}
-                  onChange={(e) => set("role", e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                  placeholder="Ej: Cocina, Operaciones"
                 />
               </label>
               <label className="mb-4 block">
