@@ -19,6 +19,15 @@ interface ProcedureVersion {
   source_processing_status: string;
   source_processing_error?: string | null;
   source_processed_at?: string | null;
+  source_result?: {
+    structure: {
+      title: string;
+      objectives: string[];
+      steps: { title: string; description: string; evidence?: { segment_range?: string } }[];
+      critical_points: { text: string; why: string; evidence?: { segment_range?: string } }[];
+    };
+    transcript_raw: string;
+  } | null;
   derived_training?: {
     id: string;
     title: string;
@@ -41,6 +50,25 @@ interface TaskOption {
   title: string;
 }
 
+const ACTIVE_SOURCE_PROCESSING_STATUSES = [
+  "UPLOADED",
+  "TRANSCRIBING",
+  "CHUNKING",
+  "INDEXING",
+  "EXTRACTING",
+] as const;
+
+const SOURCE_PROCESSING_STATUS_LABELS: Record<string, string> = {
+  pending: "Pendiente",
+  UPLOADED: "Video subido",
+  TRANSCRIBING: "Transcribiendo audio",
+  CHUNKING: "Capturando frames",
+  INDEXING: "Indexando segmentos",
+  EXTRACTING: "Extrayendo conocimiento",
+  READY: "Listo",
+  FAILED: "Error",
+};
+
 function getErrorMessage(error: unknown, fallback: string) {
   if (
     typeof error === "object" &&
@@ -51,6 +79,10 @@ function getErrorMessage(error: unknown, fallback: string) {
     return (error as { response?: { data?: { detail?: string } } }).response!.data!.detail!;
   }
   return fallback;
+}
+
+function getSourceProcessingLabel(status: string) {
+  return SOURCE_PROCESSING_STATUS_LABELS[status] ?? status;
 }
 
 export default function ProcedureDetailPage() {
@@ -76,8 +108,8 @@ export default function ProcedureDetailPage() {
     refetchInterval: (query) => {
       const data = query.state.data as ProcedureDetail | undefined;
       const hasActiveProcessing = data?.versions?.some((version) =>
-        ["UPLOADED", "TRANSCRIBING", "CHUNKING", "INDEXING", "EXTRACTING"].includes(
-          version.source_processing_status,
+        ACTIVE_SOURCE_PROCESSING_STATUSES.includes(
+          version.source_processing_status as (typeof ACTIVE_SOURCE_PROCESSING_STATUSES)[number],
         ),
       );
       return hasActiveProcessing ? 3000 : false;
@@ -331,7 +363,7 @@ export default function ProcedureDetailPage() {
                     )}
                     <div className="mt-3 rounded-md bg-white/80 px-3 py-2 text-xs text-gray-600">
                       <span className="font-medium text-gray-800">Source processing:</span>{" "}
-                      {version.source_processing_status}
+                      {getSourceProcessingLabel(version.source_processing_status)}
                       {version.source_processed_at && (
                         <span className="text-gray-400">
                           {" "}
@@ -343,6 +375,7 @@ export default function ProcedureDetailPage() {
                       )}
                     </div>
                   </div>
+                  <VersionSourceResultPanel version={version} />
                   <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -534,6 +567,129 @@ export default function ProcedureDetailPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function VersionSourceResultPanel({ version }: { version: ProcedureVersion }) {
+  const isProcessing = ACTIVE_SOURCE_PROCESSING_STATUSES.includes(
+    version.source_processing_status as (typeof ACTIVE_SOURCE_PROCESSING_STATUSES)[number],
+  );
+
+  return (
+    <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-emerald-900">Resultado del procesamiento</p>
+          <p className="mt-1 text-xs text-emerald-700">
+            Estructura extraída y transcripción del video fuente.
+          </p>
+        </div>
+        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-emerald-800">
+          {getSourceProcessingLabel(version.source_processing_status)}
+        </span>
+      </div>
+
+      {!version.source_storage_key ? (
+        <p className="mt-3 text-xs text-amber-700">
+          Sube un video fuente para generar el resultado del procesamiento.
+        </p>
+      ) : version.source_processing_status === "FAILED" ? (
+        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {version.source_processing_error || "No se pudo procesar esta versión."}
+        </div>
+      ) : isProcessing ? (
+        <p className="mt-3 text-xs text-emerald-800">
+          Estamos procesando el video de esta versión. El resultado aparecerá acá cuando termine.
+        </p>
+      ) : version.source_processing_status === "READY" && version.source_result ? (
+        <div className="mt-4 space-y-5">
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                Estructura extraída
+              </p>
+              <h3 className="mt-1 text-sm font-semibold text-gray-900">
+                {version.source_result.structure.title}
+              </h3>
+            </div>
+
+            {version.source_result.structure.objectives.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-gray-700">Objetivos</h4>
+                <ul className="list-inside list-disc space-y-1 text-sm text-gray-600">
+                  {version.source_result.structure.objectives.map((objective, index) => (
+                    <li key={`${version.id}-objective-${index}`}>{objective}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {version.source_result.structure.steps.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-gray-700">Pasos</h4>
+                <ol className="space-y-3">
+                  {version.source_result.structure.steps.map((step, index) => (
+                    <li
+                      key={`${version.id}-step-${index}`}
+                      className="rounded-lg border border-emerald-100 bg-white/80 p-3"
+                    >
+                      <p className="text-sm font-medium text-gray-800">
+                        {index + 1}. {step.title}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-600">{step.description}</p>
+                      <SegmentEvidenceBadge segmentRange={step.evidence?.segment_range} />
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {version.source_result.structure.critical_points.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-gray-700">Puntos críticos</h4>
+                <ul className="space-y-2">
+                  {version.source_result.structure.critical_points.map((point, index) => (
+                    <li
+                      key={`${version.id}-critical-point-${index}`}
+                      className="rounded-lg border border-amber-100 bg-amber-50 p-3"
+                    >
+                      <p className="text-sm font-medium text-amber-900">{point.text}</p>
+                      <p className="mt-1 text-sm text-amber-800">{point.why}</p>
+                      <SegmentEvidenceBadge segmentRange={point.evidence?.segment_range} />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <details className="rounded-lg border border-gray-200 bg-white">
+            <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-gray-800">
+              Ver transcripción completa
+            </summary>
+            <div className="border-t border-gray-200 px-3 py-3">
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap text-xs leading-6 text-gray-600">
+                {version.source_result.transcript_raw}
+              </pre>
+            </div>
+          </details>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-gray-600">
+          El procesamiento terminó, pero esta versión todavía no tiene un resultado visible.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SegmentEvidenceBadge({ segmentRange }: { segmentRange?: string }) {
+  if (!segmentRange) return null;
+
+  return (
+    <div className="mt-2 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium text-emerald-800">
+      Evidencia: {segmentRange}
     </div>
   );
 }
