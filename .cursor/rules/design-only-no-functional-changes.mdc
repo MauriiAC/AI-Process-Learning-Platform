@@ -1,0 +1,20 @@
+---
+description: Restrict the agent to visual/design changes only, with no functional changes
+alwaysApply: false
+---
+
+# Design-Only Changes
+
+- Apply this rule only when the request is explicitly about UI, layout, styling, visual polish, or design consistency.
+- Make design changes only. Do not change behavior, business logic, data flow, permissions, validations, API contracts, persistence, analytics, routing, or side effects.
+- Allowed changes include spacing, sizing, alignment, typography, colors, borders, shadows, icons, responsive layout, component composition for presentation, and non-functional copy polish.
+- Do not add or remove features.
+- Do not change form rules, loading logic, error handling, empty-state logic, filtering, sorting, searching, authentication, authorization, or submission behavior.
+- Do not change backend code, schemas, migrations, seeds, or integration contracts.
+- Preserve existing state management and event flow unless a refactor is strictly required to support the visual change without altering behavior.
+- If a requested design change would require a functional change, stop, explain the constraint, and propose a design-only alternative.
+
+## Examples
+
+- Good: restyle a button, improve spacing, update card hierarchy, refine mobile layout, improve visual consistency.
+- Not allowed: change what happens on click, alter validation rules, add a new filter, change API payloads, modify seed behavior.

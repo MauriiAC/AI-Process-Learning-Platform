@@ -39,52 +39,318 @@ _embedding_counter = 0
 
 DEMO_USERS = [
     {"name": "Admin Demo", "email": "admin@demo.com", "password": "admin123", "location": "Buenos Aires"},
-    {"name": "Sofía Jefa de Turno", "email": "sofia@demo.com", "password": "demo123", "location": "Buenos Aires"},
-    {"name": "Carlos Cocina", "email": "carlos@demo.com", "password": "demo123", "location": "Buenos Aires"},
+    {"name": "Marta Encargada", "email": "marta@demo.com", "password": "demo123", "location": "Buenos Aires"},
+    {"name": "Sofía Supervisora", "email": "sofia@demo.com", "password": "demo123", "location": "Buenos Aires"},
+    {"name": "Diego Reposición", "email": "diego@demo.com", "password": "demo123", "location": "Buenos Aires"},
     {"name": "Ana Caja", "email": "ana@demo.com", "password": "demo123", "location": "Córdoba"},
+    {"name": "Luis Alimentos", "email": "luis@demo.com", "password": "demo123", "location": "Córdoba"},
 ]
 
 DEMO_ROLES = [
-    {"code": "store-supervisor", "name": "Supervisor de sucursal", "description": "Coordina operación y verifica cumplimiento."},
-    {"code": "kitchen-operator", "name": "Operador de cocina", "description": "Ejecuta procedimientos de cocina y control."},
-    {"code": "front-desk", "name": "Atención al cliente", "description": "Opera caja, atención y manejo de reclamos."},
+    {"code": "store-manager", "name": "Encargado de sucursal", "description": "Administra la sucursal y supervisa cumplimiento operativo."},
+    {"code": "shift-supervisor", "name": "Supervisor de turno", "description": "Coordina la operación diaria y valida desvíos."},
+    {"code": "cashier", "name": "Cajero", "description": "Opera caja, entrega pedidos y maneja ventas sensibles."},
+    {"code": "stock-clerk", "name": "Reponedor", "description": "Recibe mercadería y mantiene góndolas en orden."},
+    {"code": "fresh-food-operator", "name": "Operador de alimentos", "description": "Manipula alimentos listos para consumo con foco sanitario."},
 ]
 
 DEMO_TASKS = [
-    {"title": "Controlar temperatura de conservación", "description": "Verificar y registrar temperaturas en heladeras."},
-    {"title": "Despachar pedido al cliente", "description": "Entregar pedidos validando contenido y tiempos."},
-    {"title": "Gestionar reclamo de cliente", "description": "Registrar, clasificar y escalar reclamos."},
+    {
+        "title": "Recepción de mercadería",
+        "description": "Recibir mercadería verificando cantidades, lote, temperatura y estado general.",
+    },
+    {
+        "title": "Reposición de góndolas",
+        "description": "Reponer productos validando ubicación, vencimiento y precio exhibido.",
+    },
+    {
+        "title": "Preparación y entrega de pedido pickup",
+        "description": "Preparar pedidos omnicanal y entregarlos con validaciones operativas.",
+    },
+    {
+        "title": "Venta de productos restringidos",
+        "description": "Vender alcohol o tabaco validando edad y registrando excepciones.",
+    },
+    {
+        "title": "Manejo de alimentos listos para consumo",
+        "description": "Preparar y exhibir alimentos listos para consumo cuidando higiene y conservación.",
+    },
+]
+
+DEMO_ROLE_TASK_LINKS = [
+    {"role_code": "store-manager", "task_title": "Recepción de mercadería", "is_required": True},
+    {"role_code": "store-manager", "task_title": "Venta de productos restringidos", "is_required": False},
+    {"role_code": "shift-supervisor", "task_title": "Recepción de mercadería", "is_required": True},
+    {"role_code": "shift-supervisor", "task_title": "Reposición de góndolas", "is_required": True},
+    {"role_code": "shift-supervisor", "task_title": "Preparación y entrega de pedido pickup", "is_required": True},
+    {"role_code": "stock-clerk", "task_title": "Recepción de mercadería", "is_required": True},
+    {"role_code": "stock-clerk", "task_title": "Reposición de góndolas", "is_required": True},
+    {"role_code": "cashier", "task_title": "Preparación y entrega de pedido pickup", "is_required": True},
+    {"role_code": "cashier", "task_title": "Venta de productos restringidos", "is_required": True},
+    {"role_code": "fresh-food-operator", "task_title": "Recepción de mercadería", "is_required": False},
+    {"role_code": "fresh-food-operator", "task_title": "Manejo de alimentos listos para consumo", "is_required": True},
 ]
 
 DEMO_PROCEDURES = [
     {
+        "code": "PROC-GOODS-RECEIPT",
+        "title": "Recepción y validación de mercadería",
+        "description": "Verificar remito, cantidades, lotes y estado de productos antes del ingreso.",
+        "role_code": "shift-supervisor",
+        "content": (
+            "Paso 1: comparar remito, cantidades y referencias recibidas. "
+            "Paso 2: revisar lote, vencimiento y estado del empaque. "
+            "Paso 3: registrar diferencias y escalar antes de ingresar mercadería."
+        ),
+        "training_title": "Recepción segura de mercadería",
+    },
+    {
         "code": "PROC-COLD-CHAIN",
         "title": "Control de cadena de frío",
-        "description": "Mantener y auditar la conservación segura de productos refrigerados.",
-        "role_code": "kitchen-operator",
-        "task_title": "Controlar temperatura de conservación",
-        "content": "Paso 1: revisar temperatura inicial. Paso 2: registrar desvíos. Paso 3: aislar producto comprometido.",
+        "description": "Mantener y auditar la conservación segura de productos refrigerados en recepción y manipulación.",
+        "role_code": "fresh-food-operator",
+        "content": (
+            "Paso 1: medir temperatura al recibir o retirar producto refrigerado. "
+            "Paso 2: registrar el valor y la hora en el control. "
+            "Paso 3: aislar producto fuera de rango y avisar al supervisor."
+        ),
         "training_title": "Cadena de frío y registro seguro",
     },
     {
-        "code": "PROC-ORDER-HANDOFF",
-        "title": "Entrega y validación de pedidos",
-        "description": "Estandarizar la entrega de pedidos y prevenir faltantes.",
-        "role_code": "front-desk",
-        "task_title": "Despachar pedido al cliente",
-        "content": "Paso 1: validar ticket. Paso 2: revisar contenido. Paso 3: confirmar con el cliente.",
-        "training_title": "Despacho correcto de pedidos",
+        "code": "PROC-DAMAGED-GOODS",
+        "title": "Segregación de mercadería dañada",
+        "description": "Separar y documentar productos dañados antes de su ingreso o exhibición.",
+        "role_code": "stock-clerk",
+        "content": (
+            "Paso 1: separar unidades golpeadas, abiertas o derramadas. "
+            "Paso 2: fotografiar evidencia y registrar lote. "
+            "Paso 3: enviar a devolución, descarte o cuarentena según criterio."
+        ),
+        "training_title": "Mercadería dañada y trazabilidad",
     },
     {
-        "code": "PROC-CUSTOMER-COMPLAINT",
-        "title": "Gestión de reclamos de clientes",
-        "description": "Canalizar reclamos, recopilar evidencia y activar acciones correctivas.",
-        "role_code": "store-supervisor",
-        "task_title": "Gestionar reclamo de cliente",
-        "content": "Paso 1: escuchar el reclamo. Paso 2: registrar evidencia. Paso 3: asignar seguimiento y cierre.",
-        "training_title": "Análisis y resolución de reclamos",
+        "code": "PROC-SHELF-RESTOCK",
+        "title": "Reposición segura de góndolas",
+        "description": "Reponer productos respetando orden visual, planograma y rotación correcta.",
+        "role_code": "stock-clerk",
+        "content": (
+            "Paso 1: verificar planograma y espacio disponible. "
+            "Paso 2: reponer aplicando FIFO y orden visual. "
+            "Paso 3: confirmar que no queden frentes vacíos ni producto mal ubicado."
+        ),
+        "training_title": "Reposición eficiente y ordenada",
+    },
+    {
+        "code": "PROC-EXPIRY-CHECK",
+        "title": "Control de vencimientos",
+        "description": "Detectar productos vencidos o próximos a vencer antes de exhibición o uso.",
+        "role_code": "stock-clerk",
+        "content": (
+            "Paso 1: revisar fechas antes de exhibir o manipular producto. "
+            "Paso 2: retirar unidades vencidas o próximas a vencer según política. "
+            "Paso 3: registrar merma o acción correctiva."
+        ),
+        "training_title": "Vencimientos y retiro preventivo",
+    },
+    {
+        "code": "PROC-PRICE-TAG-CHECK",
+        "title": "Validación de precios y etiquetas",
+        "description": "Confirmar que precio de góndola, sistema y promociones coincidan.",
+        "role_code": "shift-supervisor",
+        "content": (
+            "Paso 1: comparar precio en góndola, sistema y promoción vigente. "
+            "Paso 2: corregir etiqueta o reportar inconsistencia. "
+            "Paso 3: dejar evidencia y confirmar resolución antes del siguiente turno."
+        ),
+        "training_title": "Control de precios exhibidos",
+    },
+    {
+        "code": "PROC-PICKUP-PICKING",
+        "title": "Armado de pedido pickup",
+        "description": "Preparar pedidos pickup asegurando cantidades, sustituciones y estado del producto.",
+        "role_code": "cashier",
+        "content": (
+            "Paso 1: recoger cada ítem siguiendo el pedido confirmado. "
+            "Paso 2: validar cantidades, sustituciones autorizadas y estado del producto. "
+            "Paso 3: embolsar y rotular el pedido para retiro."
+        ),
+        "training_title": "Picking correcto para pickup",
+    },
+    {
+        "code": "PROC-CUSTOMER-HANDOFF",
+        "title": "Entrega al cliente",
+        "description": "Entregar pedidos o productos confirmando identidad y cierre correcto en sistema.",
+        "role_code": "cashier",
+        "content": (
+            "Paso 1: pedir nombre, código o comprobante del retiro. "
+            "Paso 2: entregar el pedido correcto y confirmar recepción con el cliente. "
+            "Paso 3: cerrar la entrega en el sistema y registrar incidencias si aparecen."
+        ),
+        "training_title": "Handoff seguro al cliente",
+    },
+    {
+        "code": "PROC-AGE-RESTRICTED-SALE",
+        "title": "Venta de productos restringidos",
+        "description": "Validar edad antes de vender productos con restricción legal.",
+        "role_code": "cashier",
+        "content": (
+            "Paso 1: solicitar identificación cuando la edad no sea evidente. "
+            "Paso 2: validar mayoría de edad antes de cobrar. "
+            "Paso 3: rechazar y registrar el intento si no hay documento válido."
+        ),
+        "training_title": "Venta responsable de productos restringidos",
+    },
+    {
+        "code": "PROC-HAND-HYGIENE",
+        "title": "Higiene de manos para alimentos",
+        "description": "Asegurar higiene de manos antes y durante la manipulación de alimentos listos para consumo.",
+        "role_code": "fresh-food-operator",
+        "content": (
+            "Paso 1: lavar y secar manos antes de manipular alimentos o utensilios. "
+            "Paso 2: repetir higiene tras tocar dinero, residuos o superficies sucias. "
+            "Paso 3: colocarse elementos limpios antes de retomar la tarea."
+        ),
+        "training_title": "Higiene crítica en manipulación de alimentos",
     },
 ]
+
+DEMO_TASK_PROCEDURE_LINKS = [
+    {"task_title": "Recepción de mercadería", "procedure_code": "PROC-GOODS-RECEIPT", "is_primary": True},
+    {"task_title": "Recepción de mercadería", "procedure_code": "PROC-COLD-CHAIN", "is_primary": False},
+    {"task_title": "Recepción de mercadería", "procedure_code": "PROC-DAMAGED-GOODS", "is_primary": False},
+    {"task_title": "Reposición de góndolas", "procedure_code": "PROC-SHELF-RESTOCK", "is_primary": True},
+    {"task_title": "Reposición de góndolas", "procedure_code": "PROC-EXPIRY-CHECK", "is_primary": False},
+    {"task_title": "Reposición de góndolas", "procedure_code": "PROC-PRICE-TAG-CHECK", "is_primary": False},
+    {
+        "task_title": "Preparación y entrega de pedido pickup",
+        "procedure_code": "PROC-PICKUP-PICKING",
+        "is_primary": True,
+    },
+    {
+        "task_title": "Preparación y entrega de pedido pickup",
+        "procedure_code": "PROC-CUSTOMER-HANDOFF",
+        "is_primary": False,
+    },
+    {"task_title": "Venta de productos restringidos", "procedure_code": "PROC-AGE-RESTRICTED-SALE", "is_primary": True},
+    {
+        "task_title": "Manejo de alimentos listos para consumo",
+        "procedure_code": "PROC-HAND-HYGIENE",
+        "is_primary": True,
+    },
+    {"task_title": "Manejo de alimentos listos para consumo", "procedure_code": "PROC-COLD-CHAIN", "is_primary": False},
+    {"task_title": "Manejo de alimentos listos para consumo", "procedure_code": "PROC-EXPIRY-CHECK", "is_primary": False},
+]
+
+DEMO_ASSIGNMENTS = [
+    {"email": "luis@demo.com", "procedure_code": "PROC-HAND-HYGIENE", "status": "completed", "score": 96},
+    {"email": "ana@demo.com", "procedure_code": "PROC-AGE-RESTRICTED-SALE", "status": "assigned", "score": None},
+    {"email": "sofia@demo.com", "procedure_code": "PROC-GOODS-RECEIPT", "status": "in_progress", "score": None},
+    {"email": "diego@demo.com", "procedure_code": "PROC-EXPIRY-CHECK", "status": "completed", "score": 88},
+]
+
+DEMO_INCIDENTS = [
+    {
+        "description": (
+            "Un cliente retiró un pedido pickup incompleto durante hora pico; el equipo preparó y entregó el "
+            "pedido, pero no hubo doble chequeo final antes del handoff."
+        ),
+        "severity": "high",
+        "role_code": "cashier",
+        "location": "Córdoba",
+        "embedding_text": "pedido pickup incompleto doble chequeo final inexistente entrega cliente",
+        "analysis_summary": (
+            "El flujo actual cubre picking y entrega, pero no existe un control final formal de integridad "
+            "antes del handoff al cliente."
+        ),
+        "resolution_summary": (
+            "Crear un procedimiento específico de verificación final previa a entrega y entrenar al personal "
+            "de caja y supervisión."
+        ),
+        "finding": {
+            "procedure_code": None,
+            "finding_type": "missing_procedure",
+            "confidence": 0.89,
+            "reasoning_summary": (
+                "Falta un procedimiento preventivo de doble chequeo final que confirme integridad del pedido "
+                "antes de la entrega al cliente."
+            ),
+            "recommended_action": (
+                "Crear PROC-ORDER-FINAL-CHECK y vincularlo a la tarea de preparación y entrega de pedido pickup."
+            ),
+        },
+    },
+    {
+        "description": (
+            "Durante una promoción, varios clientes reportaron que el precio de góndola no coincidía con caja y "
+            "el equipo resolvió cada caso distinto, sin criterio de escalamiento ni evidencia."
+        ),
+        "severity": "medium",
+        "role_code": "shift-supervisor",
+        "location": "Buenos Aires",
+        "embedding_text": "precio góndola distinto caja criterio escalamiento evidencia promoción",
+        "analysis_summary": (
+            "Existe un control de etiquetas, pero el procedimiento no define cómo actuar ante diferencias "
+            "repetidas ni qué evidencia debe quedar registrada."
+        ),
+        "resolution_summary": (
+            "Publicar una nueva versión del control de precios con umbrales, responsables y trazabilidad "
+            "de corrección."
+        ),
+        "finding": {
+            "procedure_code": "PROC-PRICE-TAG-CHECK",
+            "finding_type": "needs_redefinition",
+            "confidence": 0.84,
+            "reasoning_summary": (
+                "El procedimiento actual cubre la validación puntual de etiquetas, pero no define un flujo claro "
+                "para promociones mal configuradas o incidentes repetitivos."
+            ),
+            "recommended_action": (
+                "Redefinir PROC-PRICE-TAG-CHECK incorporando escalamiento, evidencia mínima y responsable de cierre."
+            ),
+        },
+    },
+    {
+        "description": (
+            "Una entrega de lácteos llegó con temperatura fuera de rango y el operador la guardó sin registrar "
+            "la desviación ni aislar el producto."
+        ),
+        "severity": "high",
+        "role_code": "fresh-food-operator",
+        "location": "Buenos Aires",
+        "embedding_text": "lácteos temperatura fuera de rango sin registro ni aislamiento",
+        "analysis_summary": (
+            "El procedimiento de cadena de frío existe y describe medición, registro y aislamiento, pero no se "
+            "cumplió en la recepción."
+        ),
+        "resolution_summary": (
+            "Reentrenar al equipo de recepción y exigir evidencia del control antes del ingreso a cámara."
+        ),
+        "finding": {
+            "procedure_code": "PROC-COLD-CHAIN",
+            "finding_type": "not_followed",
+            "confidence": 0.95,
+            "reasoning_summary": (
+                "La mercadería se almacenó sin ejecutar los pasos obligatorios de medición, registro y "
+                "aislamiento definidos por el procedimiento."
+            ),
+            "recommended_action": (
+                "Reasignar training de cadena de frío y exigir checklist visible durante la recepción."
+            ),
+        },
+    },
+]
+
+DEMO_CHANGE_EVENT = {
+    "title": "Nueva exigencia de evidencia en recepción refrigerada",
+    "description": (
+        "La autoridad sanitaria exige evidencia de temperatura y acción correctiva documentada para cada "
+        "recepción de productos refrigerados."
+    ),
+    "source_type": "regulation",
+    "status": "review",
+    "context_json": {"issuer": "Autoridad Sanitaria Local", "scope": "productos refrigerados"},
+    "embedding_text": "recepción refrigerada evidencia temperatura acción correctiva",
+}
 
 
 def _build_structure(title: str, content: str) -> dict:
@@ -131,6 +397,8 @@ async def safe_embedding(text: str, label: str) -> list[float] | None:
 async def get_or_create_user(db, payload: dict) -> User:
     existing = (await db.execute(select(User).where(User.email == payload["email"]))).scalar_one_or_none()
     if existing:
+        existing.name = payload["name"]
+        existing.location = payload["location"]
         return existing
     user = User(
         name=payload["name"],
@@ -166,6 +434,10 @@ async def seed():
                 role = Role(**item)
                 db.add(role)
                 await db.flush()
+            else:
+                role.name = item["name"]
+                role.description = item["description"]
+                role.is_active = True
             roles[item["code"]] = role
 
         log_progress("creando tareas demo")
@@ -183,13 +455,17 @@ async def seed():
                 )
                 db.add(task)
                 await db.flush()
+            else:
+                task.description = item["description"]
             tasks[item["title"]] = task
 
         log_progress("creando asignaciones usuario-rol")
         role_assignments_map = {
-            "sofia@demo.com": "store-supervisor",
-            "carlos@demo.com": "kitchen-operator",
-            "ana@demo.com": "front-desk",
+            "marta@demo.com": "store-manager",
+            "sofia@demo.com": "shift-supervisor",
+            "diego@demo.com": "stock-clerk",
+            "ana@demo.com": "cashier",
+            "luis@demo.com": "fresh-food-operator",
         }
         for email, role_code in role_assignments_map.items():
             user = users[email]
@@ -214,6 +490,20 @@ async def seed():
                     )
                 )
 
+        log_progress("creando relaciones rol-tarea")
+        for item in DEMO_ROLE_TASK_LINKS:
+            role = roles[item["role_code"]]
+            task = tasks[item["task_title"]]
+            existing = (
+                await db.execute(
+                    select(RoleTaskLink).where(RoleTaskLink.role_id == role.id, RoleTaskLink.task_id == task.id)
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                db.add(RoleTaskLink(role_id=role.id, task_id=task.id, is_required=item["is_required"]))
+            else:
+                existing.is_required = item["is_required"]
+
         procedures: dict[str, Procedure] = {}
         versions: dict[str, ProcedureVersion] = {}
         trainings: dict[str, Training] = {}
@@ -233,6 +523,11 @@ async def seed():
                 )
                 db.add(procedure)
                 await db.flush()
+            else:
+                procedure.title = item["title"]
+                procedure.description = item["description"]
+                procedure.owner_role_id = role.id
+                procedure.status = "active"
             procedures[item["code"]] = procedure
 
             version = (
@@ -249,7 +544,7 @@ async def seed():
                     version_number=1,
                     status="published",
                     change_summary="Versión inicial demo",
-                    change_reason="Bootstrap del dominio centrado en procedimientos",
+                    change_reason="Bootstrap retail de mini mercados",
                     effective_from=date.today() - timedelta(days=15),
                     content_json={"steps": item["content"].split(". ")},
                     content_text=item["content"],
@@ -265,6 +560,21 @@ async def seed():
                 )
                 db.add(version)
                 await db.flush()
+            else:
+                version.status = "published"
+                version.change_summary = "Versión inicial demo"
+                version.change_reason = "Bootstrap retail de mini mercados"
+                version.effective_from = date.today() - timedelta(days=15)
+                version.content_json = {"steps": item["content"].split(". ")}
+                version.content_text = item["content"]
+                version.source_asset_type = "video"
+                version.source_storage_key = f"demo/{item['code'].lower()}.mp4"
+                version.source_mime = "video/mp4"
+                version.source_size = 12_000_000
+                version.source_processing_status = "READY"
+                version.source_processing_error = None
+                version.source_processed_at = datetime.now(timezone.utc)
+                version.embedding = await safe_embedding(item["content"], label=f"procedure-version:{item['code']}")
             versions[item["code"]] = version
 
             transcript = (
@@ -282,6 +592,9 @@ async def seed():
                         language="es",
                     )
                 )
+            else:
+                transcript.transcript_raw = item["content"]
+                transcript.language = "es"
 
             existing_chunks = list(
                 (
@@ -292,22 +605,23 @@ async def seed():
                 .scalars()
                 .all()
             )
-            if not existing_chunks:
-                sentences = [part.strip() for part in item["content"].split(". ") if part.strip()]
-                for index, sentence in enumerate(sentences):
-                    db.add(
-                        ProcedureVersionChunk(
-                            procedure_version_id=version.id,
-                            chunk_index=index,
-                            text=sentence,
-                            start_time=float(index * 10),
-                            end_time=float((index + 1) * 10),
-                            embedding=await safe_embedding(
-                                sentence,
-                                label=f"chunk:{item['code']}:#{index + 1}",
-                            ),
-                        )
+            for chunk in existing_chunks:
+                await db.delete(chunk)
+            sentences = [part.strip() for part in item["content"].split(". ") if part.strip()]
+            for index, sentence in enumerate(sentences):
+                db.add(
+                    ProcedureVersionChunk(
+                        procedure_version_id=version.id,
+                        chunk_index=index,
+                        text=sentence,
+                        start_time=float(index * 10),
+                        end_time=float((index + 1) * 10),
+                        embedding=await safe_embedding(
+                            sentence,
+                            label=f"chunk:{item['code']}:#{index + 1}",
+                        ),
                     )
+                )
 
             existing_frames = list(
                 (
@@ -316,23 +630,24 @@ async def seed():
                 .scalars()
                 .all()
             )
-            if not existing_frames:
-                db.add(
-                    VideoFrame(
-                        procedure_version_id=version.id,
-                        timestamp=3.0,
-                        storage_key=f"frames/{version.id}/frame_0001.jpg",
-                        caption=f"Vista operativa del procedimiento {item['title'].lower()}",
-                    )
+            for frame in existing_frames:
+                await db.delete(frame)
+            db.add(
+                VideoFrame(
+                    procedure_version_id=version.id,
+                    timestamp=3.0,
+                    storage_key=f"frames/{version.id}/frame_0001.jpg",
+                    caption=f"Vista operativa del procedimiento {item['title'].lower()}",
                 )
-                db.add(
-                    VideoFrame(
-                        procedure_version_id=version.id,
-                        timestamp=12.0,
-                        storage_key=f"frames/{version.id}/frame_0002.jpg",
-                        caption="Registro visual de control y validación final",
-                    )
+            )
+            db.add(
+                VideoFrame(
+                    procedure_version_id=version.id,
+                    timestamp=12.0,
+                    storage_key=f"frames/{version.id}/frame_0002.jpg",
+                    caption="Registro visual de control y validación final",
                 )
+            )
 
             existing_segments = list(
                 (
@@ -343,19 +658,20 @@ async def seed():
                 .scalars()
                 .all()
             )
-            if not existing_segments:
-                db.add(
-                    SemanticSegment(
-                        procedure_version_id=version.id,
-                        start_time=0.0,
-                        end_time=10.0,
-                        text_fused=item["content"],
-                        embedding=await safe_embedding(
-                            f"{item['title']} {item['content']}",
-                            label=f"semantic-segment:{item['code']}",
-                        ),
-                    )
+            for segment in existing_segments:
+                await db.delete(segment)
+            db.add(
+                SemanticSegment(
+                    procedure_version_id=version.id,
+                    start_time=0.0,
+                    end_time=10.0,
+                    text_fused=item["content"],
+                    embedding=await safe_embedding(
+                        f"{item['title']} {item['content']}",
+                        label=f"semantic-segment:{item['code']}",
+                    ),
                 )
+            )
 
             structure = _build_structure(item["title"], item["content"])
             existing_structure = (
@@ -375,26 +691,6 @@ async def seed():
             else:
                 existing_structure.structure_json = structure
 
-            task = tasks[item["task_title"]]
-            role_task_link = (
-                await db.execute(
-                    select(RoleTaskLink).where(RoleTaskLink.role_id == role.id, RoleTaskLink.task_id == task.id)
-                )
-            ).scalar_one_or_none()
-            if role_task_link is None:
-                db.add(RoleTaskLink(role_id=role.id, task_id=task.id, is_required=True))
-
-            task_procedure_link = (
-                await db.execute(
-                    select(TaskProcedureLink).where(
-                        TaskProcedureLink.task_id == task.id,
-                        TaskProcedureLink.procedure_id == procedure.id,
-                    )
-                )
-            ).scalar_one_or_none()
-            if task_procedure_link is None:
-                db.add(TaskProcedureLink(task_id=task.id, procedure_id=procedure.id, is_primary=True))
-
             training = (
                 await db.execute(select(Training).where(Training.procedure_version_id == version.id))
             ).scalar_one_or_none()
@@ -408,6 +704,10 @@ async def seed():
                 )
                 db.add(training)
                 await db.flush()
+            else:
+                training.title = item["training_title"]
+                training.status = "published"
+                training.summary = f"Training derivado de {item['code']}"
             existing_training_structure = (
                 await db.execute(select(TrainingStructure).where(TrainingStructure.training_id == training.id))
             ).scalar_one_or_none()
@@ -415,45 +715,64 @@ async def seed():
                 db.add(TrainingStructure(training_id=training.id, structure_json=structure))
             else:
                 existing_training_structure.structure_json = structure
-            existing_quiz = (
-                await db.execute(select(QuizQuestion).where(QuizQuestion.training_id == training.id))
-            ).scalar_one_or_none()
-            if existing_quiz is None:
-                db.add(
-                    QuizQuestion(
-                        training_id=training.id,
-                        question_json={
-                            "position": 1,
-                            "type": "mcq",
-                            "question": f"¿Cuál es un paso crítico de {item['title'].lower()}?",
-                            "options": [
-                                "Documentar el proceso y validar desvíos",
-                                "Saltar el registro si no hay tiempo",
-                                "Esperar indicaciones del cliente",
-                                "Delegar el control sin evidencia",
-                            ],
-                            "correct_answer": 0,
-                            "evidence": {
-                                "segment_range": "0s-10s",
-                                "quote": item["content"][:120],
-                            },
-                            "verified": True,
+            existing_quizzes = list(
+                (await db.execute(select(QuizQuestion).where(QuizQuestion.training_id == training.id))).scalars().all()
+            )
+            for quiz in existing_quizzes:
+                await db.delete(quiz)
+            db.add(
+                QuizQuestion(
+                    training_id=training.id,
+                    question_json={
+                        "position": 1,
+                        "type": "mcq",
+                        "question": f"¿Cuál es un paso crítico de {item['title'].lower()}?",
+                        "options": [
+                            "Documentar el proceso y validar desvíos",
+                            "Saltar el registro si no hay tiempo",
+                            "Esperar indicaciones del cliente",
+                            "Delegar el control sin evidencia",
+                        ],
+                        "correct_answer": 0,
+                        "evidence": {
+                            "segment_range": "0s-10s",
+                            "quote": item["content"][:120],
                         },
-                    )
+                        "verified": True,
+                    },
                 )
+            )
             trainings[item["code"]] = training
 
         await db.flush()
 
+        log_progress("creando relaciones tarea-procedimiento")
+        for item in DEMO_TASK_PROCEDURE_LINKS:
+            task = tasks[item["task_title"]]
+            procedure = procedures[item["procedure_code"]]
+            existing = (
+                await db.execute(
+                    select(TaskProcedureLink).where(
+                        TaskProcedureLink.task_id == task.id,
+                        TaskProcedureLink.procedure_id == procedure.id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                db.add(
+                    TaskProcedureLink(
+                        task_id=task.id,
+                        procedure_id=procedure.id,
+                        is_primary=item["is_primary"],
+                    )
+                )
+            else:
+                existing.is_primary = item["is_primary"]
+
         log_progress("creando assignments demo")
-        assignment_specs = [
-            ("carlos@demo.com", "PROC-COLD-CHAIN", "completed", 93),
-            ("ana@demo.com", "PROC-ORDER-HANDOFF", "assigned", None),
-            ("sofia@demo.com", "PROC-CUSTOMER-COMPLAINT", "in_progress", None),
-        ]
-        for email, procedure_code, status_value, score in assignment_specs:
-            user = users[email]
-            training = trainings[procedure_code]
+        for item in DEMO_ASSIGNMENTS:
+            user = users[item["email"]]
+            training = trainings[item["procedure_code"]]
             existing = (
                 await db.execute(
                     select(Assignment).where(Assignment.training_id == training.id, Assignment.user_id == user.id)
@@ -464,146 +783,122 @@ async def seed():
                     training_id=training.id,
                     user_id=user.id,
                     assignment_type="training",
-                    status=status_value,
+                    status=item["status"],
                     due_date=date.today() + timedelta(days=7),
-                    score=score,
-                    attempts=1 if score is not None else 0,
-                    completed_at=datetime.now(timezone.utc) if status_value == "completed" else None,
-                    started_at=datetime.now(timezone.utc) if status_value in {"completed", "in_progress"} else None,
+                    score=item["score"],
+                    attempts=1 if item["score"] is not None else 0,
+                    completed_at=datetime.now(timezone.utc) if item["status"] == "completed" else None,
+                    started_at=datetime.now(timezone.utc) if item["status"] in {"completed", "in_progress"} else None,
                 )
                 db.add(existing)
+            else:
+                existing.status = item["status"]
+                existing.due_date = date.today() + timedelta(days=7)
+                existing.score = item["score"]
+                existing.attempts = 1 if item["score"] is not None else 0
+                existing.completed_at = datetime.now(timezone.utc) if item["status"] == "completed" else None
+                existing.started_at = (
+                    datetime.now(timezone.utc) if item["status"] in {"completed", "in_progress"} else None
+                )
 
-        incident = (
-            await db.execute(select(Incident).where(Incident.description.like("%pedido llegó incompleto%")))
-        ).scalar_one_or_none()
-        if incident is None:
-            incident = Incident(
-                description="Un cliente reportó que su pedido llegó incompleto y sin validación final.",
-                severity="high",
-                role_id=roles["front-desk"].id,
-                location="Córdoba",
-                created_by=admin.id,
-                embedding=await safe_embedding(
-                    "pedido incompleto validación final entrega cliente",
-                    label="incident:pedido incompleto",
-                ),
-            )
-            db.add(incident)
-            await db.flush()
-        existing_incident_analysis = (
-            await db.execute(select(IncidentAnalysisRun).where(IncidentAnalysisRun.incident_id == incident.id))
-        ).scalar_one_or_none()
-        if existing_incident_analysis is None:
-            existing_incident_analysis = IncidentAnalysisRun(
-                incident_id=incident.id,
-                source="manual",
-                analysis_summary=(
-                    "Se detectaron multiples causas: no se siguio la validacion final, faltan controles "
-                    "preventivos y el flujo de reclamos requiere redefinicion."
-                ),
-                resolution_summary=(
-                    "Reforzar entrenamiento de despacho, redefinir el flujo de reclamos recurrentes y crear "
-                    "un control de pre-despacho."
-                ),
-                created_by=admin.id,
-            )
-            db.add(existing_incident_analysis)
-            await db.flush()
+        log_progress("creando incidentes demo")
+        for item in DEMO_INCIDENTS:
+            incident = (
+                await db.execute(select(Incident).where(Incident.description == item["description"]))
+            ).scalar_one_or_none()
+            if incident is None:
+                incident = Incident(
+                    description=item["description"],
+                    severity=item["severity"],
+                    role_id=roles[item["role_code"]].id,
+                    location=item["location"],
+                    created_by=admin.id,
+                    embedding=await safe_embedding(item["embedding_text"], label=f"incident:{item['role_code']}"),
+                )
+                db.add(incident)
+                await db.flush()
+            else:
+                incident.severity = item["severity"]
+                incident.role_id = roles[item["role_code"]].id
+                incident.location = item["location"]
+                incident.embedding = await safe_embedding(item["embedding_text"], label=f"incident:{item['role_code']}")
 
-        existing_findings = list(
-            (
+            analysis_run = (
                 await db.execute(
-                    select(IncidentAnalysisFinding).where(
-                        IncidentAnalysisFinding.analysis_run_id == existing_incident_analysis.id
+                    select(IncidentAnalysisRun).where(
+                        IncidentAnalysisRun.incident_id == incident.id,
+                        IncidentAnalysisRun.source == "manual",
                     )
                 )
-            )
-            .scalars()
-            .all()
-        )
-        for finding in existing_findings:
-            await db.delete(finding)
+            ).scalar_one_or_none()
+            if analysis_run is None:
+                analysis_run = IncidentAnalysisRun(
+                    incident_id=incident.id,
+                    source="manual",
+                    analysis_summary=item["analysis_summary"],
+                    resolution_summary=item["resolution_summary"],
+                    created_by=admin.id,
+                )
+                db.add(analysis_run)
+                await db.flush()
+            else:
+                analysis_run.analysis_summary = item["analysis_summary"]
+                analysis_run.resolution_summary = item["resolution_summary"]
+                analysis_run.created_by = admin.id
 
-        db.add(
-            IncidentAnalysisFinding(
-                analysis_run_id=existing_incident_analysis.id,
-                procedure_version_id=versions["PROC-ORDER-HANDOFF"].id,
-                finding_type="not_followed",
-                confidence=0.94,
-                reasoning_summary=(
-                    "El equipo no ejecuto la validacion final del pedido antes de entregarlo al cliente."
-                ),
-                recommended_action=(
-                    "Reforzar el training de despacho correcto y exigir checklist visible en mostrador."
-                ),
-                status="confirmed",
+            existing_findings = list(
+                (
+                    await db.execute(
+                        select(IncidentAnalysisFinding).where(IncidentAnalysisFinding.analysis_run_id == analysis_run.id)
+                    )
+                )
+                .scalars()
+                .all()
             )
-        )
-        db.add(
-            IncidentAnalysisFinding(
-                analysis_run_id=existing_incident_analysis.id,
-                procedure_version_id=versions["PROC-CUSTOMER-COMPLAINT"].id,
-                finding_type="needs_redefinition",
-                confidence=0.72,
-                reasoning_summary=(
-                    "El procedimiento de gestion de reclamos no contempla bien incidentes repetitivos de "
-                    "entrega incompleta ni escalamiento rapido."
-                ),
-                recommended_action=(
-                    "Crear una nueva version del procedimiento de reclamos con disparadores de escalamiento y "
-                    "captura de evidencia recurrente."
-                ),
-                status="confirmed",
-            )
-        )
-        db.add(
-            IncidentAnalysisFinding(
-                analysis_run_id=existing_incident_analysis.id,
-                procedure_version_id=None,
-                finding_type="missing_procedure",
-                confidence=0.68,
-                reasoning_summary=(
-                    "Falta un procedimiento preventivo especifico para control final de integridad del pedido "
-                    "antes de la entrega."
-                ),
-                recommended_action="Definir un procedimiento de pre-despacho con doble chequeo y registro.",
-                status="confirmed",
-            )
-        )
+            for finding in existing_findings:
+                await db.delete(finding)
 
-        follow_up_incident = (
-            await db.execute(select(Incident).where(Incident.description.like("%pedido fue entregado sin chequear%")))
+            procedure_code = item["finding"]["procedure_code"]
+            db.add(
+                IncidentAnalysisFinding(
+                    analysis_run_id=analysis_run.id,
+                    procedure_version_id=versions[procedure_code].id if procedure_code else None,
+                    finding_type=item["finding"]["finding_type"],
+                    confidence=item["finding"]["confidence"],
+                    reasoning_summary=item["finding"]["reasoning_summary"],
+                    recommended_action=item["finding"]["recommended_action"],
+                    status="confirmed",
+                )
+            )
+
+        change_event = (
+            await db.execute(select(ChangeEvent).where(ChangeEvent.title == DEMO_CHANGE_EVENT["title"]))
         ).scalar_one_or_none()
-        if follow_up_incident is None:
-            follow_up_incident = Incident(
-                description="Otro cliente indicó que su pedido fue entregado sin chequear y faltaban productos.",
-                severity="medium",
-                role_id=roles["front-desk"].id,
-                location="Buenos Aires",
-                created_by=admin.id,
-                embedding=await safe_embedding(
-                    "pedido entregado sin chequear faltaban productos validación final",
-                    label="incident:entrega sin chequear",
-                ),
-            )
-            db.add(follow_up_incident)
-
-        change_event = (await db.execute(select(ChangeEvent).where(ChangeEvent.title == "Nueva exigencia de control de conservación"))).scalar_one_or_none()
         if change_event is None:
             change_event = ChangeEvent(
-                title="Nueva exigencia de control de conservación",
-                description="Se requiere duplicar la frecuencia de control y documentar acciones correctivas ante desvíos.",
-                source_type="regulation",
-                status="review",
+                title=DEMO_CHANGE_EVENT["title"],
+                description=DEMO_CHANGE_EVENT["description"],
+                source_type=DEMO_CHANGE_EVENT["source_type"],
+                status=DEMO_CHANGE_EVENT["status"],
                 effective_from=date.today() + timedelta(days=10),
-                context_json={"issuer": "Autoridad Sanitaria Local"},
+                context_json=DEMO_CHANGE_EVENT["context_json"],
                 created_by=admin.id,
                 embedding=await safe_embedding(
-                    "control conservación frecuencia acciones correctivas cadena de frío",
-                    label="change-event:control de conservación",
+                    DEMO_CHANGE_EVENT["embedding_text"],
+                    label="change-event:recepcion refrigerada",
                 ),
             )
             db.add(change_event)
+        else:
+            change_event.description = DEMO_CHANGE_EVENT["description"]
+            change_event.source_type = DEMO_CHANGE_EVENT["source_type"]
+            change_event.status = DEMO_CHANGE_EVENT["status"]
+            change_event.effective_from = date.today() + timedelta(days=10)
+            change_event.context_json = DEMO_CHANGE_EVENT["context_json"]
+            change_event.embedding = await safe_embedding(
+                DEMO_CHANGE_EVENT["embedding_text"],
+                label="change-event:recepcion refrigerada",
+            )
 
         log_progress("sincronizando compliance")
         await sync_user_procedure_compliance(db)
