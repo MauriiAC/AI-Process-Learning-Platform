@@ -1,37 +1,19 @@
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import { getStoredUser, clearAuth } from "@/lib/auth";
+import { clearAuth, getDemoRole, getStoredUser } from "@/lib/auth";
+import { getNavItemsForRole, getSecondaryActionsForRole, roleLabels } from "@/lib/demoAccess";
 import {
-  BookOpen,
-  Search,
-  ClipboardList,
-  BarChart3,
-  AlertTriangle,
   GitBranch,
-  BriefcaseBusiness,
-  Users,
-  ShieldCheck,
-  Radar,
   LogOut,
   Menu,
   X,
 } from "lucide-react";
 import { useState } from "react";
 
-const navItems = [
-  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { to: "/procedures", label: "Procedimientos", icon: GitBranch },
-  { to: "/roles", label: "Roles", icon: BriefcaseBusiness },
-  { to: "/users", label: "Usuarios", icon: Users },
-  { to: "/compliance", label: "Compliance", icon: ShieldCheck },
-  { to: "/trainings", label: "Trainings", icon: BookOpen },
-  { to: "/assignments", label: "Asignaciones", icon: ClipboardList },
-  { to: "/change-events", label: "Change Events", icon: Radar },
-  { to: "/incidents", label: "Incidentes", icon: AlertTriangle },
-  { to: "/search", label: "Buscar", icon: Search },
-];
-
 export default function Layout() {
   const user = getStoredUser();
+  const role = getDemoRole() ?? "operator";
+  const navItems = getNavItemsForRole(role);
+  const secondaryActions = getSecondaryActionsForRole(role);
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -56,7 +38,12 @@ export default function Layout() {
       >
         <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-6">
           <GitBranch className="h-6 w-6 text-indigo-600" />
-          <span className="text-lg font-bold text-gray-900">ProcedureOps</span>
+          <div className="min-w-0">
+            <span className="block truncate text-lg font-bold text-gray-900">ProcedureOps</span>
+            <span className="block text-xs font-medium uppercase tracking-wide text-indigo-600">
+              Vista {roleLabels[role]}
+            </span>
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
@@ -86,6 +73,7 @@ export default function Layout() {
                 {user?.name ?? "Usuario"}
               </p>
               <p className="truncate text-xs text-gray-500">{user?.email}</p>
+              <p className="mt-1 text-xs font-medium text-indigo-600">{roleLabels[role]}</p>
             </div>
             <button
               onClick={handleLogout}
@@ -107,9 +95,34 @@ export default function Layout() {
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
           <div className="flex-1" />
-          <span className="text-sm text-gray-600">
-            Hola, <span className="font-medium text-gray-900">{user?.name ?? "Usuario"}</span>
-          </span>
+          {secondaryActions.length > 0 && (
+            <div className="flex items-center gap-2">
+              {secondaryActions.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) =>
+                    `inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-indigo-50 text-indigo-700"
+                        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    }`
+                  }
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{label}</span>
+                </NavLink>
+              ))}
+            </div>
+          )}
+          <div className="text-right">
+            <span className="block text-sm text-gray-600">
+              Hola, <span className="font-medium text-gray-900">{user?.name ?? "Usuario"}</span>
+            </span>
+            <span className="block text-xs font-medium uppercase tracking-wide text-indigo-600">
+              {roleLabels[role]}
+            </span>
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">

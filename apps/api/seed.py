@@ -6,16 +6,25 @@ Run migrations first:
     python seed.py
 """
 
+import argparse
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import or_, select
+from sqlalchemy import delete, false, or_, select
 
-from app.core.database import async_session
+from app.core.database import Base, async_session
 from app.core.security import hash_password
+from app.models.ai_usage_event import AIUsageEvent
 from app.models.assignment import Assignment
-from app.models.change_event import ChangeEvent
-from app.models.incident import Incident, IncidentAnalysisFinding, IncidentAnalysisRun
+from app.models.change_event import ChangeEvent, ProcedureImpactAssessment
+from app.models.incident import (
+    Incident,
+    IncidentAnalysisFinding,
+    IncidentAnalysisRun,
+    IncidentRelatedMatch,
+    IncidentTrainingLink,
+)
+from app.models.job import Job
 from app.models.procedure import (
     Procedure,
     ProcedureVersion,
@@ -23,12 +32,13 @@ from app.models.procedure import (
     ProcedureVersionStructure,
     ProcedureVersionTranscript,
     TaskProcedureLink,
+    UserProcedureCompliance,
 )
 from app.models.quiz import QuizQuestion
 from app.models.role import Role, RoleTaskLink, UserRoleAssignment
 from app.models.semantic_segment import SemanticSegment
-from app.models.task import Task
-from app.models.training import Training, TrainingStructure
+from app.models.task import Task, TaskTrainingLink
+from app.models.training import Training, TrainingChunk, TrainingStructure, TrainingTranscript
 from app.models.user import User
 from app.models.video_frame import VideoFrame
 from app.services.compliance_service import sync_user_procedure_compliance
@@ -314,6 +324,11 @@ DEMO_CHANGE_EVENT = {
     "embedding_text": "recepción refrigerada evidencia temperatura acción correctiva",
 }
 
+DEMO_USER_EMAILS = [item["email"] for item in DEMO_USERS]
+DEMO_ROLE_CODES = [item["code"] for item in DEMO_ROLES]
+DEMO_PROCEDURE_CODES = [item["code"] for item in DEMO_PROCEDURES]
+DEMO_INCIDENT_DESCRIPTIONS = [item["description"] for item in DEMO_INCIDENTS]
+
 
 def _build_structure(title: str, content: str) -> dict:
     steps = [part.strip() for part in content.split(". ") if part.strip()]
@@ -349,6 +364,235 @@ def hidden_role_procedure_marker(role_code: str, procedure_code: str) -> str:
     return f"[hidden-role-procedure] role={role_code} procedure={procedure_code}"
 
 
+DEMO_TASK_MARKERS = [
+    hidden_role_procedure_marker(item["role_code"], item["procedure_code"])
+    for item in DEMO_ROLE_PROCEDURE_LINKS
+]
+
+
+async def wipe_demo_data(db) -> None:
+    log_progress("wipe demo: resolviendo entidades demo")
+
+    demo_user_ids = list(
+        (await db.execute(select(User.id).where(User.email.in_(DEMO_USER_EMAILS)))).scalars().all()
+    )
+    demo_role_ids = list(
+        (await db.execute(select(Role.id).where(Role.code.in_(DEMO_ROLE_CODES)))).scalars().all()
+    )
+    demo_procedure_ids = list(
+        (await db.execute(select(Procedure.id).where(Procedure.code.in_(DEMO_PROCEDURE_CODES)))).scalars().all()
+    )
+    demo_version_ids = list(
+        (
+            await db.execute(
+                select(ProcedureVersion.id).where(ProcedureVersion.procedure_id.in_(demo_procedure_ids))
+            )
+        )
+        .scalars()
+        .all()
+        if demo_procedure_ids
+        else []
+    )
+    demo_training_ids = list(
+        (await db.execute(select(Training.id).where(Training.procedure_version_id.in_(demo_version_ids))))
+        .scalars()
+        .all()
+        if demo_version_ids
+        else []
+    )
+    demo_incident_ids = list(
+        (
+            await db.execute(
+                select(Incident.id).where(Incident.description.in_(DEMO_INCIDENT_DESCRIPTIONS))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    demo_analysis_run_ids = list(
+        (
+            await db.execute(
+                select(IncidentAnalysisRun.id).where(IncidentAnalysisRun.incident_id.in_(demo_incident_ids))
+            )
+        )
+        .scalars()
+        .all()
+        if demo_incident_ids
+        else []
+    )
+    demo_change_event_ids = list(
+        (
+            await db.execute(
+                select(ChangeEvent.id).where(ChangeEvent.title == DEMO_CHANGE_EVENT["title"])
+            )
+        )
+        .scalars()
+        .all()
+    )
+    demo_task_ids = list(
+        (
+            await db.execute(
+                select(Task.id).where(
+                    or_(
+                        Task.description.in_(DEMO_TASK_MARKERS),
+                        Task.description.like("[hidden-role-procedure]%"),
+                        Task.title.in_(LEGACY_DEMO_TASK_TITLES),
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    log_progress("wipe demo: eliminando dependencias")
+    if demo_user_ids or demo_procedure_ids:
+        await db.execute(
+            delete(UserProcedureCompliance).where(
+                or_(
+                    UserProcedureCompliance.user_id.in_(demo_user_ids) if demo_user_ids else false(),
+                    UserProcedureCompliance.procedure_id.in_(demo_procedure_ids) if demo_procedure_ids else false(),
+                )
+            )
+        )
+
+    if demo_analysis_run_ids or demo_incident_ids:
+        await db.execute(
+            delete(IncidentRelatedMatch).where(
+                or_(
+                    IncidentRelatedMatch.analysis_run_id.in_(demo_analysis_run_ids)
+                    if demo_analysis_run_ids
+                    else false(),
+                    IncidentRelatedMatch.related_analysis_run_id.in_(demo_analysis_run_ids)
+                    if demo_analysis_run_ids
+                    else false(),
+                    IncidentRelatedMatch.related_incident_id.in_(demo_incident_ids)
+                    if demo_incident_ids
+                    else false(),
+                )
+            )
+        )
+        await db.execute(
+            delete(IncidentAnalysisFinding).where(
+                IncidentAnalysisFinding.analysis_run_id.in_(demo_analysis_run_ids)
+            )
+        )
+        await db.execute(delete(IncidentAnalysisRun).where(IncidentAnalysisRun.id.in_(demo_analysis_run_ids)))
+
+    if demo_incident_ids or demo_training_ids:
+        await db.execute(
+            delete(IncidentTrainingLink).where(
+                or_(
+                    IncidentTrainingLink.incident_id.in_(demo_incident_ids) if demo_incident_ids else false(),
+                    IncidentTrainingLink.training_id.in_(demo_training_ids) if demo_training_ids else false(),
+                )
+            )
+        )
+
+    if demo_incident_ids:
+        await db.execute(delete(Incident).where(Incident.id.in_(demo_incident_ids)))
+
+    if demo_training_ids:
+        await db.execute(delete(AIUsageEvent).where(AIUsageEvent.training_id.in_(demo_training_ids)))
+        await db.execute(delete(Job).where(Job.training_id.in_(demo_training_ids)))
+        await db.execute(delete(QuizQuestion).where(QuizQuestion.training_id.in_(demo_training_ids)))
+        await db.execute(delete(TaskTrainingLink).where(TaskTrainingLink.training_id.in_(demo_training_ids)))
+        await db.execute(delete(Assignment).where(Assignment.training_id.in_(demo_training_ids)))
+        await db.execute(delete(TrainingTranscript).where(TrainingTranscript.training_id.in_(demo_training_ids)))
+        await db.execute(delete(TrainingChunk).where(TrainingChunk.training_id.in_(demo_training_ids)))
+        await db.execute(delete(TrainingStructure).where(TrainingStructure.training_id.in_(demo_training_ids)))
+        await db.execute(delete(Training).where(Training.id.in_(demo_training_ids)))
+
+    if demo_version_ids or demo_procedure_ids or demo_change_event_ids:
+        await db.execute(
+            delete(ProcedureImpactAssessment).where(
+                or_(
+                    ProcedureImpactAssessment.change_event_id.in_(demo_change_event_ids)
+                    if demo_change_event_ids
+                    else false(),
+                    ProcedureImpactAssessment.procedure_id.in_(demo_procedure_ids)
+                    if demo_procedure_ids
+                    else false(),
+                    ProcedureImpactAssessment.procedure_version_id.in_(demo_version_ids)
+                    if demo_version_ids
+                    else false(),
+                )
+            )
+        )
+
+    if demo_version_ids:
+        await db.execute(delete(SemanticSegment).where(SemanticSegment.procedure_version_id.in_(demo_version_ids)))
+        await db.execute(delete(VideoFrame).where(VideoFrame.procedure_version_id.in_(demo_version_ids)))
+        await db.execute(
+            delete(ProcedureVersionChunk).where(ProcedureVersionChunk.procedure_version_id.in_(demo_version_ids))
+        )
+        await db.execute(
+            delete(ProcedureVersionTranscript).where(
+                ProcedureVersionTranscript.procedure_version_id.in_(demo_version_ids)
+            )
+        )
+        await db.execute(
+            delete(ProcedureVersionStructure).where(
+                ProcedureVersionStructure.procedure_version_id.in_(demo_version_ids)
+            )
+        )
+        await db.execute(delete(ProcedureVersion).where(ProcedureVersion.id.in_(demo_version_ids)))
+
+    if demo_task_ids or demo_procedure_ids:
+        await db.execute(
+            delete(TaskProcedureLink).where(
+                or_(
+                    TaskProcedureLink.task_id.in_(demo_task_ids) if demo_task_ids else false(),
+                    TaskProcedureLink.procedure_id.in_(demo_procedure_ids) if demo_procedure_ids else false(),
+                )
+            )
+        )
+        await db.execute(
+            delete(RoleTaskLink).where(
+                or_(
+                    RoleTaskLink.task_id.in_(demo_task_ids) if demo_task_ids else false(),
+                    RoleTaskLink.role_id.in_(demo_role_ids) if demo_role_ids else false(),
+                )
+            )
+        )
+
+    if demo_task_ids:
+        await db.execute(delete(Task).where(Task.id.in_(demo_task_ids)))
+
+    if demo_procedure_ids:
+        await db.execute(delete(Procedure).where(Procedure.id.in_(demo_procedure_ids)))
+
+    if demo_change_event_ids:
+        await db.execute(delete(ChangeEvent).where(ChangeEvent.id.in_(demo_change_event_ids)))
+
+    if demo_user_ids or demo_role_ids:
+        await db.execute(
+            delete(UserRoleAssignment).where(
+                or_(
+                    UserRoleAssignment.user_id.in_(demo_user_ids) if demo_user_ids else false(),
+                    UserRoleAssignment.role_id.in_(demo_role_ids) if demo_role_ids else false(),
+                )
+            )
+        )
+
+    if demo_role_ids:
+        await db.execute(delete(Role).where(Role.id.in_(demo_role_ids)))
+
+    if demo_user_ids:
+        await db.execute(delete(User).where(User.id.in_(demo_user_ids)))
+
+    await db.flush()
+    log_progress("wipe demo: completo")
+
+
+async def wipe_all_data(db) -> None:
+    log_progress("wipe full: eliminando toda la base")
+    for table in reversed(Base.metadata.sorted_tables):
+        await db.execute(table.delete())
+    await db.flush()
+    log_progress("wipe full: completo")
+
+
 async def safe_embedding(text: str, label: str) -> list[float] | None:
     global _embedding_counter
     _embedding_counter += 1
@@ -377,9 +621,17 @@ async def get_or_create_user(db, payload: dict) -> User:
     return user
 
 
-async def seed():
-    log_progress("inicio")
+async def seed(mode: str = "demo"):
+    if mode not in {"demo", "full"}:
+        raise ValueError(f"Unsupported seed mode: {mode}")
+
+    log_progress(f"inicio modo={mode}")
     async with async_session() as db:
+        if mode == "full":
+            await wipe_all_data(db)
+        else:
+            await wipe_demo_data(db)
+
         log_progress("creando usuarios demo")
         admin = None
         users: dict[str, User] = {}
@@ -909,8 +1161,23 @@ async def seed():
         await db.commit()
 
     log_progress("completo")
-    print("Seed complete: migrate with Alembic first, then run python seed.py", flush=True)
+    print(f"Seed complete ({mode}): migrate with Alembic first, then run python seed.py", flush=True)
+
+
+async def reseed_demo():
+    await seed(mode="demo")
+
+
+async def reseed_full():
+    await seed(mode="full")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Seed demo data")
+    parser.add_argument("--mode", choices=["demo", "full"], default="demo")
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    args = parse_args()
+    asyncio.run(seed(mode=args.mode))

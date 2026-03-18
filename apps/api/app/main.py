@@ -8,6 +8,7 @@ from app.routers import (
     change_events,
     compliance,
     dashboard,
+    dev_seed,
     incidents,
     procedures,
     roles,
@@ -44,6 +45,7 @@ app.include_router(assignments.router)
 app.include_router(tasks.router)
 app.include_router(incidents.router)
 app.include_router(dashboard.router)
+app.include_router(dev_seed.router)
 app.include_router(roles.router)
 app.include_router(procedures.router)
 app.include_router(compliance.router)
