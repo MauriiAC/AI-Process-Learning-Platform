@@ -24,6 +24,14 @@ class RoleTaskRef(BaseModel):
     is_required: bool
 
 
+class RoleProcedureRef(BaseModel):
+    id: uuid.UUID
+    procedure_id: uuid.UUID
+    procedure_code: str
+    procedure_title: str
+    is_required: bool
+
+
 class RoleOut(BaseModel):
     id: uuid.UUID
     code: str
@@ -37,6 +45,7 @@ class RoleOut(BaseModel):
 
 class RoleDetailOut(RoleOut):
     tasks: list[RoleTaskRef] = []
+    procedures: list[RoleProcedureRef] = []
 
 
 class UserRoleAssignmentCreate(BaseModel):
@@ -74,4 +83,20 @@ class RoleTaskLinkOut(BaseModel):
     role_name: str
     task_id: uuid.UUID
     task_title: str
+    is_required: bool
+
+
+class RoleProcedureLinkCreate(BaseModel):
+    role_id: uuid.UUID
+    procedure_id: uuid.UUID
+    is_required: bool = True
+
+
+class RoleProcedureLinkOut(BaseModel):
+    id: uuid.UUID
+    role_id: uuid.UUID
+    role_name: str
+    procedure_id: uuid.UUID
+    procedure_code: str
+    procedure_title: str
     is_required: bool

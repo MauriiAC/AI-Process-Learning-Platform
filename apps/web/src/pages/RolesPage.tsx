@@ -17,8 +17,9 @@ interface User {
   location?: string | null;
 }
 
-interface Task {
+interface ProcedureOption {
   id: string;
+  code: string;
   title: string;
 }
 
@@ -34,7 +35,7 @@ export default function RolesPage() {
   const queryClient = useQueryClient();
   const [roleForm, setRoleForm] = useState({ code: "", name: "", description: "" });
   const [assignmentForm, setAssignmentForm] = useState({ user_id: "", role_id: "", location: "" });
-  const [roleTaskForm, setRoleTaskForm] = useState({ role_id: "", task_id: "" });
+  const [roleProcedureForm, setRoleProcedureForm] = useState({ role_id: "", procedure_id: "" });
 
   const { data: roles, isLoading } = useQuery<Role[]>({
     queryKey: ["roles"],
@@ -44,9 +45,9 @@ export default function RolesPage() {
     queryKey: ["users"],
     queryFn: () => api.get("/users").then((r) => r.data),
   });
-  const { data: tasks } = useQuery<Task[]>({
-    queryKey: ["tasks"],
-    queryFn: () => api.get("/tasks").then((r) => r.data),
+  const { data: procedures } = useQuery<ProcedureOption[]>({
+    queryKey: ["procedures"],
+    queryFn: () => api.get("/procedures").then((r) => r.data),
   });
   const { data: assignments } = useQuery<UserRoleAssignment[]>({
     queryKey: ["role-assignments"],
@@ -73,10 +74,11 @@ export default function RolesPage() {
     },
   });
 
-  const linkTaskMutation = useMutation({
-    mutationFn: () => api.post("/roles/task-links", { ...roleTaskForm, is_required: true }),
+  const linkProcedureMutation = useMutation({
+    mutationFn: () => api.post("/roles/procedure-links", { ...roleProcedureForm, is_required: true }),
     onSuccess: () => {
-      setRoleTaskForm({ role_id: "", task_id: "" });
+      setRoleProcedureForm({ role_id: "", procedure_id: "" });
+      queryClient.invalidateQueries({ queryKey: ["procedures"] });
     },
   });
 
@@ -85,7 +87,7 @@ export default function RolesPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Roles</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Define roles activos, sus tareas requeridas y la asignación real a personas.
+          Define roles activos, sus procedimientos requeridos y la asignación real a personas.
         </p>
       </div>
 
@@ -229,17 +231,17 @@ export default function RolesPage() {
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              linkTaskMutation.mutate();
+              linkProcedureMutation.mutate();
             }}
             className="rounded-2xl border border-gray-200 bg-white p-5"
           >
-            <h2 className="text-lg font-semibold text-gray-900">Vincular tarea requerida</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Vincular procedimiento requerido</h2>
             <div className="mt-4 space-y-3">
               <select
                 required
-                value={roleTaskForm.role_id}
+                value={roleProcedureForm.role_id}
                 onChange={(event) =>
-                  setRoleTaskForm((current) => ({ ...current, role_id: event.target.value }))
+                  setRoleProcedureForm((current) => ({ ...current, role_id: event.target.value }))
                 }
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
               >
@@ -252,26 +254,26 @@ export default function RolesPage() {
               </select>
               <select
                 required
-                value={roleTaskForm.task_id}
+                value={roleProcedureForm.procedure_id}
                 onChange={(event) =>
-                  setRoleTaskForm((current) => ({ ...current, task_id: event.target.value }))
+                  setRoleProcedureForm((current) => ({ ...current, procedure_id: event.target.value }))
                 }
                 className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
               >
-                <option value="">Tarea</option>
-                {tasks?.map((task) => (
-                  <option key={task.id} value={task.id}>
-                    {task.title}
+                <option value="">Procedimiento</option>
+                {procedures?.map((procedure) => (
+                  <option key={procedure.id} value={procedure.id}>
+                    {procedure.code} · {procedure.title}
                   </option>
                 ))}
               </select>
             </div>
             <button
               type="submit"
-              disabled={linkTaskMutation.isPending}
+              disabled={linkProcedureMutation.isPending}
               className="mt-4 rounded-lg border border-indigo-200 px-4 py-2.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
             >
-              Vincular tarea
+              Vincular procedimiento
             </button>
           </form>
 

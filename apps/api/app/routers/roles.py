@@ -1,11 +1,13 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.procedure import Procedure, TaskProcedureLink
 from app.models.role import Role, RoleTaskLink, UserRoleAssignment
 from app.models.task import Task
 from app.models.user import User
@@ -13,6 +15,8 @@ from app.schemas.role import (
     RoleCreate,
     RoleDetailOut,
     RoleOut,
+    RoleProcedureLinkCreate,
+    RoleProcedureLinkOut,
     RoleTaskLinkCreate,
     RoleTaskLinkOut,
     RoleUpdate,
@@ -28,6 +32,17 @@ def _role_out(role: Role) -> RoleOut:
 
 
 def _role_detail_out(role: Role) -> RoleDetailOut:
+    procedure_map: dict[uuid.UUID, dict] = {}
+    for link in role.task_links:
+        for procedure_link in link.task.procedure_links:
+            procedure_map[procedure_link.procedure_id] = {
+                "id": link.task_id,
+                "procedure_id": procedure_link.procedure_id,
+                "procedure_code": procedure_link.procedure.code,
+                "procedure_title": procedure_link.procedure.title,
+                "is_required": link.is_required,
+            }
+
     return RoleDetailOut(
         **RoleOut.model_validate(role).model_dump(),
         tasks=[
@@ -39,11 +54,23 @@ def _role_detail_out(role: Role) -> RoleDetailOut:
             }
             for link in role.task_links
         ],
+        procedures=list(procedure_map.values()),
     )
 
 
 async def _get_role_or_404(role_id: uuid.UUID, db: AsyncSession) -> Role:
-    role = (await db.execute(select(Role).where(Role.id == role_id))).scalar_one_or_none()
+    role = (
+        await db.execute(
+            select(Role)
+            .where(Role.id == role_id)
+            .options(
+                selectinload(Role.task_links)
+                .selectinload(RoleTaskLink.task)
+                .selectinload(Task.procedure_links)
+                .selectinload(TaskProcedureLink.procedure)
+            )
+        )
+    ).scalar_one_or_none()
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
     return role
@@ -184,6 +211,63 @@ async def create_role_task_link(
     )
 
 
+@router.post("/procedure-links", response_model=RoleProcedureLinkOut, status_code=status.HTTP_201_CREATED)
+async def create_role_procedure_link(
+    payload: RoleProcedureLinkCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    role = (await db.execute(select(Role).where(Role.id == payload.role_id))).scalar_one_or_none()
+    procedure = (await db.execute(select(Procedure).where(Procedure.id == payload.procedure_id))).scalar_one_or_none()
+    if role is None or procedure is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role or procedure not found")
+
+    existing_link = (
+        await db.execute(
+            select(RoleTaskLink)
+            .join(TaskProcedureLink, RoleTaskLink.task_id == TaskProcedureLink.task_id)
+            .where(
+                RoleTaskLink.role_id == payload.role_id,
+                TaskProcedureLink.procedure_id == payload.procedure_id,
+            )
+        )
+    ).scalars().first()
+    if existing_link is not None:
+        existing_link.is_required = payload.is_required
+        await db.commit()
+        await db.refresh(existing_link)
+        return RoleProcedureLinkOut(
+            id=existing_link.task_id,
+            role_id=existing_link.role_id,
+            role_name=existing_link.role.name,
+            procedure_id=procedure.id,
+            procedure_code=procedure.code,
+            procedure_title=procedure.title,
+            is_required=existing_link.is_required,
+        )
+
+    task = Task(
+        title=f"{role.name} · {procedure.title}",
+        description=f"[hidden-role-procedure] role={role.code} procedure={procedure.code}",
+    )
+    db.add(task)
+    await db.flush()
+
+    db.add(RoleTaskLink(role_id=role.id, task_id=task.id, is_required=payload.is_required))
+    db.add(TaskProcedureLink(task_id=task.id, procedure_id=procedure.id, is_primary=True))
+    await db.commit()
+
+    return RoleProcedureLinkOut(
+        id=task.id,
+        role_id=role.id,
+        role_name=role.name,
+        procedure_id=procedure.id,
+        procedure_code=procedure.code,
+        procedure_title=procedure.title,
+        is_required=payload.is_required,
+    )
+
+
 @router.delete("/task-links/{link_id}", response_model=RoleDetailOut)
 async def delete_role_task_link(
     link_id: uuid.UUID,
@@ -197,6 +281,35 @@ async def delete_role_task_link(
     await db.delete(link)
     await db.commit()
     return _role_detail_out(await _get_role_or_404(role_id, db))
+
+
+@router.delete("/procedure-links/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_role_procedure_link(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = (
+        await db.execute(
+            select(Task)
+            .where(Task.id == task_id)
+            .options(
+                selectinload(Task.role_links),
+                selectinload(Task.procedure_links),
+            )
+        )
+    ).scalar_one_or_none()
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role procedure link not found")
+    if len(task.role_links) != 1 or len(task.procedure_links) != 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Task is not a dedicated role-procedure link",
+        )
+
+    await db.delete(task)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{role_id}", response_model=RoleDetailOut)

@@ -5,7 +5,6 @@ import {
   Search,
   ClipboardList,
   BarChart3,
-  CheckSquare,
   AlertTriangle,
   GitBranch,
   BriefcaseBusiness,
@@ -27,7 +26,6 @@ const navItems = [
   { to: "/trainings", label: "Trainings", icon: BookOpen },
   { to: "/assignments", label: "Asignaciones", icon: ClipboardList },
   { to: "/change-events", label: "Change Events", icon: Radar },
-  { to: "/tasks", label: "Tareas", icon: CheckSquare },
   { to: "/incidents", label: "Incidentes", icon: AlertTriangle },
   { to: "/search", label: "Buscar", icon: Search },
 ];

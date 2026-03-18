@@ -78,9 +78,18 @@ class ProcedureOut(BaseModel):
     latest_version: ProcedureVersionOut | None = None
 
 
+class ProcedureRoleRef(BaseModel):
+    id: uuid.UUID
+    role_id: uuid.UUID
+    role_code: str
+    role_name: str
+    is_required: bool
+
+
 class ProcedureDetailOut(ProcedureOut):
     versions: list[ProcedureVersionOut] = []
     linked_tasks: list[dict] = []
+    roles: list[ProcedureRoleRef] = []
 
 
 class TaskProcedureLinkOut(BaseModel):

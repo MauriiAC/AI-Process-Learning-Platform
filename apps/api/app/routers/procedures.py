@@ -4,12 +4,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.job import Job
 from app.models.procedure import Procedure, ProcedureVersion, TaskProcedureLink
-from app.models.role import Role
+from app.models.role import Role, RoleTaskLink
 from app.models.task import Task
 from app.models.training import Training
 from app.models.user import User
@@ -109,7 +110,18 @@ async def create_procedure(
 
 @router.get("/{procedure_id}", response_model=ProcedureDetailOut)
 async def get_procedure(procedure_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    procedure = (await db.execute(select(Procedure).where(Procedure.id == procedure_id))).scalar_one_or_none()
+    procedure = (
+        await db.execute(
+            select(Procedure)
+            .where(Procedure.id == procedure_id)
+            .options(
+                selectinload(Procedure.task_links)
+                .selectinload(TaskProcedureLink.task)
+                .selectinload(Task.role_links)
+                .selectinload(RoleTaskLink.role)
+            )
+        )
+    ).scalar_one_or_none()
     if procedure is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Procedure not found")
 
@@ -127,6 +139,16 @@ async def get_procedure(procedure_id: uuid.UUID, db: AsyncSession = Depends(get_
     task_links = list(
         (await db.execute(select(TaskProcedureLink).where(TaskProcedureLink.procedure_id == procedure_id))).scalars().all()
     )
+    role_map: dict[uuid.UUID, dict] = {}
+    for task_link in procedure.task_links:
+        for role_link in task_link.task.role_links:
+            role_map[role_link.role_id] = {
+                "id": task_link.task_id,
+                "role_id": role_link.role_id,
+                "role_code": role_link.role.code,
+                "role_name": role_link.role.name,
+                "is_required": role_link.is_required,
+            }
 
     return ProcedureDetailOut(
         **_to_procedure_out(procedure, versions[0] if versions else None).model_dump(),
@@ -135,6 +157,7 @@ async def get_procedure(procedure_id: uuid.UUID, db: AsyncSession = Depends(get_
             {"id": str(link.id), "task_id": str(link.task_id), "task_title": link.task.title, "is_primary": link.is_primary}
             for link in task_links
         ],
+        roles=list(role_map.values()),
     )
 
 

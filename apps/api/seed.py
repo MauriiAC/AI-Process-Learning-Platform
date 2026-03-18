@@ -9,7 +9,7 @@ Run migrations first:
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.core.database import async_session
 from app.core.security import hash_password
@@ -54,41 +54,12 @@ DEMO_ROLES = [
     {"code": "fresh-food-operator", "name": "Operador de alimentos", "description": "Manipula alimentos listos para consumo con foco sanitario."},
 ]
 
-DEMO_TASKS = [
-    {
-        "title": "Recepción de mercadería",
-        "description": "Recibir mercadería verificando cantidades, lote, temperatura y estado general.",
-    },
-    {
-        "title": "Reposición de góndolas",
-        "description": "Reponer productos validando ubicación, vencimiento y precio exhibido.",
-    },
-    {
-        "title": "Preparación y entrega de pedido pickup",
-        "description": "Preparar pedidos omnicanal y entregarlos con validaciones operativas.",
-    },
-    {
-        "title": "Venta de productos restringidos",
-        "description": "Vender alcohol o tabaco validando edad y registrando excepciones.",
-    },
-    {
-        "title": "Manejo de alimentos listos para consumo",
-        "description": "Preparar y exhibir alimentos listos para consumo cuidando higiene y conservación.",
-    },
-]
-
-DEMO_ROLE_TASK_LINKS = [
-    {"role_code": "store-manager", "task_title": "Recepción de mercadería", "is_required": True},
-    {"role_code": "store-manager", "task_title": "Venta de productos restringidos", "is_required": False},
-    {"role_code": "shift-supervisor", "task_title": "Recepción de mercadería", "is_required": True},
-    {"role_code": "shift-supervisor", "task_title": "Reposición de góndolas", "is_required": True},
-    {"role_code": "shift-supervisor", "task_title": "Preparación y entrega de pedido pickup", "is_required": True},
-    {"role_code": "stock-clerk", "task_title": "Recepción de mercadería", "is_required": True},
-    {"role_code": "stock-clerk", "task_title": "Reposición de góndolas", "is_required": True},
-    {"role_code": "cashier", "task_title": "Preparación y entrega de pedido pickup", "is_required": True},
-    {"role_code": "cashier", "task_title": "Venta de productos restringidos", "is_required": True},
-    {"role_code": "fresh-food-operator", "task_title": "Recepción de mercadería", "is_required": False},
-    {"role_code": "fresh-food-operator", "task_title": "Manejo de alimentos listos para consumo", "is_required": True},
+LEGACY_DEMO_TASK_TITLES = [
+    "Recepción de mercadería",
+    "Reposición de góndolas",
+    "Preparación y entrega de pedido pickup",
+    "Venta de productos restringidos",
+    "Manejo de alimentos listos para consumo",
 ]
 
 DEMO_PROCEDURES = [
@@ -214,31 +185,22 @@ DEMO_PROCEDURES = [
     },
 ]
 
-DEMO_TASK_PROCEDURE_LINKS = [
-    {"task_title": "Recepción de mercadería", "procedure_code": "PROC-GOODS-RECEIPT", "is_primary": True},
-    {"task_title": "Recepción de mercadería", "procedure_code": "PROC-COLD-CHAIN", "is_primary": False},
-    {"task_title": "Recepción de mercadería", "procedure_code": "PROC-DAMAGED-GOODS", "is_primary": False},
-    {"task_title": "Reposición de góndolas", "procedure_code": "PROC-SHELF-RESTOCK", "is_primary": True},
-    {"task_title": "Reposición de góndolas", "procedure_code": "PROC-EXPIRY-CHECK", "is_primary": False},
-    {"task_title": "Reposición de góndolas", "procedure_code": "PROC-PRICE-TAG-CHECK", "is_primary": False},
-    {
-        "task_title": "Preparación y entrega de pedido pickup",
-        "procedure_code": "PROC-PICKUP-PICKING",
-        "is_primary": True,
-    },
-    {
-        "task_title": "Preparación y entrega de pedido pickup",
-        "procedure_code": "PROC-CUSTOMER-HANDOFF",
-        "is_primary": False,
-    },
-    {"task_title": "Venta de productos restringidos", "procedure_code": "PROC-AGE-RESTRICTED-SALE", "is_primary": True},
-    {
-        "task_title": "Manejo de alimentos listos para consumo",
-        "procedure_code": "PROC-HAND-HYGIENE",
-        "is_primary": True,
-    },
-    {"task_title": "Manejo de alimentos listos para consumo", "procedure_code": "PROC-COLD-CHAIN", "is_primary": False},
-    {"task_title": "Manejo de alimentos listos para consumo", "procedure_code": "PROC-EXPIRY-CHECK", "is_primary": False},
+DEMO_ROLE_PROCEDURE_LINKS = [
+    {"role_code": "store-manager", "procedure_code": "PROC-GOODS-RECEIPT", "is_required": True},
+    {"role_code": "store-manager", "procedure_code": "PROC-AGE-RESTRICTED-SALE", "is_required": False},
+    {"role_code": "shift-supervisor", "procedure_code": "PROC-GOODS-RECEIPT", "is_required": True},
+    {"role_code": "shift-supervisor", "procedure_code": "PROC-PRICE-TAG-CHECK", "is_required": True},
+    {"role_code": "shift-supervisor", "procedure_code": "PROC-CUSTOMER-HANDOFF", "is_required": True},
+    {"role_code": "stock-clerk", "procedure_code": "PROC-DAMAGED-GOODS", "is_required": True},
+    {"role_code": "stock-clerk", "procedure_code": "PROC-SHELF-RESTOCK", "is_required": True},
+    {"role_code": "stock-clerk", "procedure_code": "PROC-EXPIRY-CHECK", "is_required": True},
+    {"role_code": "cashier", "procedure_code": "PROC-PICKUP-PICKING", "is_required": True},
+    {"role_code": "cashier", "procedure_code": "PROC-CUSTOMER-HANDOFF", "is_required": True},
+    {"role_code": "cashier", "procedure_code": "PROC-AGE-RESTRICTED-SALE", "is_required": True},
+    {"role_code": "fresh-food-operator", "procedure_code": "PROC-GOODS-RECEIPT", "is_required": False},
+    {"role_code": "fresh-food-operator", "procedure_code": "PROC-COLD-CHAIN", "is_required": True},
+    {"role_code": "fresh-food-operator", "procedure_code": "PROC-HAND-HYGIENE", "is_required": True},
+    {"role_code": "fresh-food-operator", "procedure_code": "PROC-EXPIRY-CHECK", "is_required": True},
 ]
 
 DEMO_ASSIGNMENTS = [
@@ -275,7 +237,7 @@ DEMO_INCIDENTS = [
                 "antes de la entrega al cliente."
             ),
             "recommended_action": (
-                "Crear PROC-ORDER-FINAL-CHECK y vincularlo a la tarea de preparación y entrega de pedido pickup."
+                "Crear PROC-ORDER-FINAL-CHECK y vincularlo al rol de caja para el flujo de entrega pickup."
             ),
         },
     },
@@ -383,6 +345,10 @@ def log_progress(message: str) -> None:
     print(f"[seed] {message}", flush=True)
 
 
+def hidden_role_procedure_marker(role_code: str, procedure_code: str) -> str:
+    return f"[hidden-role-procedure] role={role_code} procedure={procedure_code}"
+
+
 async def safe_embedding(text: str, label: str) -> list[float] | None:
     global _embedding_counter
     _embedding_counter += 1
@@ -440,25 +406,6 @@ async def seed():
                 role.is_active = True
             roles[item["code"]] = role
 
-        log_progress("creando tareas demo")
-        tasks: dict[str, Task] = {}
-        for item in DEMO_TASKS:
-            task = (await db.execute(select(Task).where(Task.title == item["title"]))).scalar_one_or_none()
-            if task is None:
-                task = Task(
-                    title=item["title"],
-                    description=item["description"],
-                    embedding=await safe_embedding(
-                        f"{item['title']} {item['description']}",
-                        label=f"task:{item['title']}",
-                    ),
-                )
-                db.add(task)
-                await db.flush()
-            else:
-                task.description = item["description"]
-            tasks[item["title"]] = task
-
         log_progress("creando asignaciones usuario-rol")
         role_assignments_map = {
             "marta@demo.com": "store-manager",
@@ -489,20 +436,6 @@ async def seed():
                         starts_on=date.today() - timedelta(days=30),
                     )
                 )
-
-        log_progress("creando relaciones rol-tarea")
-        for item in DEMO_ROLE_TASK_LINKS:
-            role = roles[item["role_code"]]
-            task = tasks[item["task_title"]]
-            existing = (
-                await db.execute(
-                    select(RoleTaskLink).where(RoleTaskLink.role_id == role.id, RoleTaskLink.task_id == task.id)
-                )
-            ).scalar_one_or_none()
-            if existing is None:
-                db.add(RoleTaskLink(role_id=role.id, task_id=task.id, is_required=item["is_required"]))
-            else:
-                existing.is_required = item["is_required"]
 
         procedures: dict[str, Procedure] = {}
         versions: dict[str, ProcedureVersion] = {}
@@ -746,28 +679,98 @@ async def seed():
 
         await db.flush()
 
-        log_progress("creando relaciones tarea-procedimiento")
-        for item in DEMO_TASK_PROCEDURE_LINKS:
-            task = tasks[item["task_title"]]
-            procedure = procedures[item["procedure_code"]]
-            existing = (
+        log_progress("limpiando relaciones demo rol-procedimiento")
+        existing_demo_tasks = list(
+            (
                 await db.execute(
-                    select(TaskProcedureLink).where(
-                        TaskProcedureLink.task_id == task.id,
-                        TaskProcedureLink.procedure_id == procedure.id,
+                    select(Task).where(
+                        or_(
+                            Task.description.like("[hidden-role-procedure]%"),
+                            Task.title.in_(LEGACY_DEMO_TASK_TITLES),
+                        )
                     )
                 )
-            ).scalar_one_or_none()
-            if existing is None:
-                db.add(
-                    TaskProcedureLink(
-                        task_id=task.id,
-                        procedure_id=procedure.id,
-                        is_primary=item["is_primary"],
-                    )
+            )
+            .scalars()
+            .all()
+        )
+        for task in existing_demo_tasks:
+            await db.delete(task)
+
+        existing_demo_role_links = list(
+            (
+                await db.execute(
+                    select(RoleTaskLink).where(RoleTaskLink.role_id.in_([role.id for role in roles.values()]))
                 )
+            )
+            .scalars()
+            .all()
+        )
+        for link in existing_demo_role_links:
+            await db.delete(link)
+
+        await db.flush()
+
+        log_progress("creando relaciones demo rol-procedimiento")
+        for item in DEMO_ROLE_PROCEDURE_LINKS:
+            role = roles[item["role_code"]]
+            procedure = procedures[item["procedure_code"]]
+            marker = hidden_role_procedure_marker(item["role_code"], item["procedure_code"])
+            task = (await db.execute(select(Task).where(Task.description == marker))).scalars().first()
+            if task is None:
+                task = Task(
+                    title=f"{role.name} · {procedure.title}",
+                    description=marker,
+                    embedding=await safe_embedding(
+                        f"{role.name} {procedure.title} {procedure.description or ''}",
+                        label=f"hidden-task:{item['role_code']}:{item['procedure_code']}",
+                    ),
+                )
+                db.add(task)
+                await db.flush()
             else:
-                existing.is_primary = item["is_primary"]
+                task.title = f"{role.name} · {procedure.title}"
+                task.description = marker
+                task.embedding = await safe_embedding(
+                    f"{role.name} {procedure.title} {procedure.description or ''}",
+                    label=f"hidden-task:{item['role_code']}:{item['procedure_code']}",
+                )
+
+            role_links = list(
+                (
+                    await db.execute(select(RoleTaskLink).where(RoleTaskLink.task_id == task.id))
+                )
+                .scalars()
+                .all()
+            )
+            current_role_link = None
+            for role_link in role_links:
+                if role_link.role_id == role.id and current_role_link is None:
+                    current_role_link = role_link
+                else:
+                    await db.delete(role_link)
+            if current_role_link is None:
+                db.add(RoleTaskLink(role_id=role.id, task_id=task.id, is_required=item["is_required"]))
+            else:
+                current_role_link.is_required = item["is_required"]
+
+            procedure_links = list(
+                (
+                    await db.execute(select(TaskProcedureLink).where(TaskProcedureLink.task_id == task.id))
+                )
+                .scalars()
+                .all()
+            )
+            current_procedure_link = None
+            for procedure_link in procedure_links:
+                if procedure_link.procedure_id == procedure.id and current_procedure_link is None:
+                    current_procedure_link = procedure_link
+                else:
+                    await db.delete(procedure_link)
+            if current_procedure_link is None:
+                db.add(TaskProcedureLink(task_id=task.id, procedure_id=procedure.id, is_primary=True))
+            else:
+                current_procedure_link.is_primary = True
 
         log_progress("creando assignments demo")
         for item in DEMO_ASSIGNMENTS:

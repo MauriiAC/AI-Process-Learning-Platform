@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
 import { ArrowLeft, BriefcaseBusiness, Loader2, Unlink } from "lucide-react";
 
-interface RoleTask {
+interface RoleProcedure {
   id: string;
-  task_id: string;
-  task_title: string;
+  procedure_id: string;
+  procedure_code: string;
+  procedure_title: string;
   is_required: boolean;
 }
 
@@ -18,22 +19,20 @@ interface RoleDetail {
   description?: string | null;
   is_active: boolean;
   created_at: string;
-  tasks: RoleTask[];
+  procedures: RoleProcedure[];
 }
 
-interface TaskOption {
+interface ProcedureOption {
   id: string;
+  code: string;
   title: string;
 }
 
 export default function RoleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const taskPickerRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState({ code: "", name: "", description: "", is_active: true });
-  const [taskId, setTaskId] = useState("");
-  const [taskSearch, setTaskSearch] = useState("");
-  const [isTaskPickerOpen, setIsTaskPickerOpen] = useState(false);
+  const [procedureId, setProcedureId] = useState("");
 
   const { data: role, isLoading } = useQuery<RoleDetail>({
     queryKey: ["role", id],
@@ -41,9 +40,9 @@ export default function RoleDetailPage() {
     enabled: Boolean(id),
   });
 
-  const { data: tasks } = useQuery<TaskOption[]>({
-    queryKey: ["tasks"],
-    queryFn: () => api.get("/tasks").then((r) => r.data),
+  const { data: procedures } = useQuery<ProcedureOption[]>({
+    queryKey: ["procedures"],
+    queryFn: () => api.get("/procedures").then((r) => r.data),
   });
 
   useEffect(() => {
@@ -64,22 +63,25 @@ export default function RoleDetailPage() {
     },
   });
 
-  const linkTaskMutation = useMutation({
-    mutationFn: () => api.post("/roles/task-links", { role_id: id, task_id: taskId, is_required: true }).then((r) => r.data),
+  const linkProcedureMutation = useMutation({
+    mutationFn: () =>
+      api
+        .post("/roles/procedure-links", { role_id: id, procedure_id: procedureId, is_required: true })
+        .then((r) => r.data),
     onSuccess: () => {
-      setTaskId("");
-      setTaskSearch("");
-      setIsTaskPickerOpen(false);
+      setProcedureId("");
       queryClient.invalidateQueries({ queryKey: ["role", id] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
+      queryClient.invalidateQueries({ queryKey: ["procedures"] });
     },
   });
 
-  const unlinkTaskMutation = useMutation({
-    mutationFn: (linkId: string) => api.delete(`/roles/task-links/${linkId}`).then((r) => r.data),
+  const unlinkProcedureMutation = useMutation({
+    mutationFn: (linkId: string) => api.delete(`/roles/procedure-links/${linkId}`).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["role", id] });
       queryClient.invalidateQueries({ queryKey: ["roles"] });
+      queryClient.invalidateQueries({ queryKey: ["procedures"] });
     },
   });
 
@@ -91,22 +93,8 @@ export default function RoleDetailPage() {
     );
   }
 
-  const availableTasks =
-    tasks?.filter((task) => !role.tasks.some((linked) => linked.task_id === task.id)) ?? [];
-  const filteredTasks = availableTasks.filter((task) =>
-    task.title.toLowerCase().includes(taskSearch.trim().toLowerCase()),
-  );
-
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      if (!taskPickerRef.current?.contains(event.target as Node)) {
-        setIsTaskPickerOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, []);
+  const availableProcedures =
+    procedures?.filter((procedure) => !role.procedures.some((linked) => linked.procedure_id === procedure.id)) ?? [];
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -130,7 +118,7 @@ export default function RoleDetailPage() {
                   Estado: {role.is_active ? "Activo" : "Inactivo"}
                 </span>
                 <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700">
-                  {role.tasks.length} tareas vinculadas
+                  {role.procedures.length} procedimientos vinculados
                 </span>
               </div>
             </div>
@@ -189,72 +177,50 @@ export default function RoleDetailPage() {
         </form>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-gray-900">Tareas vinculadas</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Procedimientos vinculados</h2>
           <div className="mt-4 flex items-center gap-2">
-            <div ref={taskPickerRef} className="relative w-full">
-              <input
-                type="text"
-                value={taskSearch}
-                onChange={(event) => {
-                  setTaskSearch(event.target.value);
-                  setTaskId("");
-                  setIsTaskPickerOpen(true);
-                }}
-                onFocus={() => setIsTaskPickerOpen(true)}
-                placeholder="Buscar y seleccionar tarea"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
-              />
-              {isTaskPickerOpen && (
-                <div className="absolute z-10 mt-2 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                  {filteredTasks.length === 0 ? (
-                    <div className="px-3 py-2 text-sm text-gray-500">
-                      No se encontraron tareas con ese nombre.
-                    </div>
-                  ) : (
-                    filteredTasks.map((task) => (
-                      <button
-                        key={task.id}
-                        type="button"
-                        onClick={() => {
-                          setTaskId(task.id);
-                          setTaskSearch(task.title);
-                          setIsTaskPickerOpen(false);
-                        }}
-                        className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                      >
-                        {task.title}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
+            <select
+              value={procedureId}
+              onChange={(event) => setProcedureId(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+            >
+              <option value="">Seleccionar procedimiento</option>
+              {availableProcedures.map((procedure) => (
+                <option key={procedure.id} value={procedure.id}>
+                  {procedure.code} · {procedure.title}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
-              disabled={!taskId || linkTaskMutation.isPending}
-              onClick={() => linkTaskMutation.mutate()}
+              disabled={!procedureId || linkProcedureMutation.isPending}
+              onClick={() => linkProcedureMutation.mutate()}
               className="rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
             >
               Vincular
             </button>
           </div>
           <div className="mt-4 space-y-2">
-            {!role.tasks.length ? (
-              <p className="text-sm text-gray-400">Este rol todavía no tiene tareas vinculadas.</p>
+            {!role.procedures.length ? (
+              <p className="text-sm text-gray-400">Este rol todavía no tiene procedimientos vinculados.</p>
             ) : (
-              role.tasks.map((task) => (
+              role.procedures.map((procedure) => (
                 <div
-                  key={task.id}
+                  key={procedure.id}
                   className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-4 py-2.5"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{task.task_title}</p>
-                    <p className="text-xs text-gray-400">{task.is_required ? "Requerida" : "Opcional"}</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {procedure.procedure_code} · {procedure.procedure_title}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {procedure.is_required ? "Requerido" : "Opcional"}
+                    </p>
                   </div>
                   <button
                     type="button"
-                    disabled={unlinkTaskMutation.isPending}
-                    onClick={() => unlinkTaskMutation.mutate(task.id)}
+                    disabled={unlinkProcedureMutation.isPending}
+                    onClick={() => unlinkProcedureMutation.mutate(procedure.id)}
                     className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
                   >
                     <Unlink className="h-3 w-3" />

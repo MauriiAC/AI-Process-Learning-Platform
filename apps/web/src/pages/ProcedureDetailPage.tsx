@@ -1,7 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, FileStack, FileVideo, Link2, Loader2, Sparkles, Trash2, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  FileStack,
+  FileVideo,
+  Link2,
+  Loader2,
+  Sparkles,
+  Trash2,
+  Unlink,
+  Upload,
+} from "lucide-react";
 import api from "@/services/api";
 
 interface ProcedureVersion {
@@ -42,12 +53,13 @@ interface ProcedureDetail {
   description?: string | null;
   owner_role_name?: string | null;
   versions: ProcedureVersion[];
-  linked_tasks: Array<{ id: string; task_id: string; task_title: string; is_primary: boolean }>;
+  roles: Array<{ id: string; role_id: string; role_code: string; role_name: string; is_required: boolean }>;
 }
 
-interface TaskOption {
+interface RoleOption {
   id: string;
-  title: string;
+  code: string;
+  name: string;
 }
 
 const ACTIVE_SOURCE_PROCESSING_STATUSES = [
@@ -89,16 +101,13 @@ export default function ProcedureDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const taskPickerRef = useRef<HTMLDivElement | null>(null);
   const [versionForm, setVersionForm] = useState({
     change_summary: "",
     change_reason: "",
     effective_from: "",
     content_text: "",
   });
-  const [taskId, setTaskId] = useState("");
-  const [taskSearch, setTaskSearch] = useState("");
-  const [isTaskPickerOpen, setIsTaskPickerOpen] = useState(false);
+  const [roleId, setRoleId] = useState("");
   const [versionFiles, setVersionFiles] = useState<Record<string, File | null>>({});
 
   const { data: procedure, isLoading } = useQuery<ProcedureDetail>({
@@ -116,9 +125,9 @@ export default function ProcedureDetailPage() {
     },
   });
 
-  const { data: tasks } = useQuery<TaskOption[]>({
-    queryKey: ["tasks"],
-    queryFn: () => api.get("/tasks").then((r) => r.data),
+  const { data: roles } = useQuery<RoleOption[]>({
+    queryKey: ["roles"],
+    queryFn: () => api.get("/roles").then((r) => r.data),
   });
 
   const createVersionMutation = useMutation({
@@ -134,18 +143,25 @@ export default function ProcedureDetailPage() {
     },
   });
 
-  const linkTaskMutation = useMutation({
+  const linkRoleMutation = useMutation({
     mutationFn: () =>
-      api.post("/procedures/task-links", {
-        task_id: taskId,
+      api.post("/roles/procedure-links", {
+        role_id: roleId,
         procedure_id: id,
-        is_primary: true,
+        is_required: true,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["procedure", id] });
-      setTaskId("");
-      setTaskSearch("");
-      setIsTaskPickerOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      setRoleId("");
+    },
+  });
+
+  const unlinkRoleMutation = useMutation({
+    mutationFn: (linkId: string) => api.delete(`/roles/procedure-links/${linkId}`).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["procedure", id] });
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
     },
   });
 
@@ -189,22 +205,11 @@ export default function ProcedureDetailPage() {
     mutationFn: () => api.delete(`/procedures/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["procedures"] });
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
       queryClient.invalidateQueries({ queryKey: ["trainings"] });
       navigate("/procedures");
     },
   });
-
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      if (!taskPickerRef.current?.contains(event.target as Node)) {
-        setIsTaskPickerOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, []);
 
   if (isLoading || !procedure) {
     return (
@@ -214,12 +219,8 @@ export default function ProcedureDetailPage() {
     );
   }
 
-  const filteredTasks =
-    tasks?.filter((task) => {
-      const matchesSearch = task.title.toLowerCase().includes(taskSearch.trim().toLowerCase());
-      const isAlreadyLinked = procedure.linked_tasks.some((item) => item.task_id === task.id);
-      return matchesSearch && !isAlreadyLinked;
-    }) ?? [];
+  const availableRoles =
+    roles?.filter((role) => !procedure.roles.some((linked) => linked.role_id === role.id)) ?? [];
 
   function handleDelete() {
     if (!procedure || deleteMutation.isPending) return;
@@ -432,13 +433,36 @@ export default function ProcedureDetailPage() {
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <p className="mb-2 text-sm font-medium text-gray-700">Tareas conectadas</p>
+                <p className="mb-2 text-sm font-medium text-gray-700">Roles vinculados</p>
                 <div className="space-y-2">
-                  {procedure.linked_tasks.map((item) => (
-                    <div key={item.id} className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                      {item.task_title}
-                    </div>
-                  ))}
+                  {!procedure.roles.length ? (
+                    <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                      Este procedimiento todavía no tiene roles vinculados.
+                    </p>
+                  ) : (
+                    procedure.roles.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-700"
+                      >
+                        <div>
+                          <p className="font-medium text-gray-800">{item.role_name}</p>
+                          <p className="text-xs text-gray-500">
+                            {item.role_code} · {item.is_required ? "Requerido" : "Opcional"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={unlinkRoleMutation.isPending}
+                          onClick={() => unlinkRoleMutation.mutate(item.id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                        >
+                          <Unlink className="h-3 w-3" />
+                          Quitar
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
               <div>
@@ -515,54 +539,28 @@ export default function ProcedureDetailPage() {
           </form>
 
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <h2 className="text-lg font-semibold text-gray-900">Vincular tarea</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Vincular rol</h2>
             <div className="mt-4">
-              <div ref={taskPickerRef} className="relative">
-                <input
-                  type="text"
-                  value={taskSearch}
-                  onChange={(event) => {
-                    setTaskSearch(event.target.value);
-                    setTaskId("");
-                    setIsTaskPickerOpen(true);
-                  }}
-                  onFocus={() => setIsTaskPickerOpen(true)}
-                  placeholder="Buscar y seleccionar tarea"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
-                />
-                {isTaskPickerOpen && (
-                  <div className="absolute z-10 mt-2 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
-                    {filteredTasks.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-gray-500">
-                        No se encontraron tareas con ese nombre.
-                      </div>
-                    ) : (
-                      filteredTasks.map((task) => (
-                        <button
-                          key={task.id}
-                          type="button"
-                          onClick={() => {
-                            setTaskId(task.id);
-                            setTaskSearch(task.title);
-                            setIsTaskPickerOpen(false);
-                          }}
-                          className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                        >
-                          {task.title}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
+              <select
+                value={roleId}
+                onChange={(event) => setRoleId(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm"
+              >
+                <option value="">Seleccionar rol</option>
+                {availableRoles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.code} · {role.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <button
               type="button"
-              onClick={() => linkTaskMutation.mutate()}
-              disabled={!taskId || linkTaskMutation.isPending}
+              onClick={() => linkRoleMutation.mutate()}
+              disabled={!roleId || linkRoleMutation.isPending}
               className="mt-4 rounded-lg border border-indigo-200 px-4 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
             >
-              Vincular tarea
+              Vincular rol
             </button>
           </div>
         </div>

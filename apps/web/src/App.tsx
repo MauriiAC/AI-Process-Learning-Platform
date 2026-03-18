@@ -8,8 +8,6 @@ import SearchPage from "./pages/SearchPage";
 import AssignmentsPage from "./pages/AssignmentsPage";
 import DashboardPage from "./pages/DashboardPage";
 import IncidentsPage from "./pages/IncidentsPage";
-import TasksPage from "./pages/TasksPage";
-import TaskDetailPage from "./pages/TaskDetailPage";
 import ProceduresPage from "./pages/ProceduresPage";
 import ProcedureDetailPage from "./pages/ProcedureDetailPage";
 import RolesPage from "./pages/RolesPage";
@@ -48,8 +46,6 @@ export default function App() {
         <Route path="assignments" element={<AssignmentsPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="incidents" element={<IncidentsPage />} />
-        <Route path="tasks" element={<TasksPage />} />
-        <Route path="tasks/:id" element={<TaskDetailPage />} />
       </Route>
     </Routes>
   );
