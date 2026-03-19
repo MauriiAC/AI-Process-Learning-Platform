@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, ChevronRight, ClipboardList, Loader2 } from "lucide-react";
+import { BookOpen, Check, ChevronRight, ClipboardList, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { getStoredUser } from "@/lib/auth";
@@ -31,6 +31,18 @@ export default function OperatorHomePage() {
     [assignments],
   );
 
+  const procedureCountLabel = useMemo(() => {
+    const n = compliance.length;
+    if (n === 1) return "1 procedimiento";
+    return `${n} procedimientos`;
+  }, [compliance.length]);
+
+  const pendingTrainingsCountLabel = useMemo(() => {
+    const n = pendingAssignments.length;
+    if (n === 1) return "1 training";
+    return `${n} trainings`;
+  }, [pendingAssignments.length]);
+
   if (complianceLoading || assignmentsLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -40,7 +52,7 @@ export default function OperatorHomePage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pt-8">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-600 to-indigo-700 p-8 text-white shadow-lg">
         <p className="text-sm font-medium text-indigo-100">Home operativa</p>
         <h1 className="mt-2 text-3xl font-bold">Hola, {user?.name ?? "Operador"}</h1>
@@ -79,7 +91,7 @@ export default function OperatorHomePage() {
           detail="Por responder o completar"
         />
         <SummaryCard
-          icon={<AlertTriangle className="h-5 w-5 text-green-600" />}
+          icon={<Check className="h-5 w-5 text-green-600" />}
           label="Trainings completados"
           value={completedAssignments.length}
           detail="Con registro de envío"
@@ -90,21 +102,26 @@ export default function OperatorHomePage() {
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Tus procedimientos activos</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Procedimientos relevantes según tus roles actuales.
-              </p>
+              <h2 className="text-lg font-semibold text-gray-900">Tus procedimientos</h2>
+              <p className="mt-1 text-sm text-gray-500">Según tus roles actuales</p>
             </div>
-            <Link to="/procedures" className="text-indigo-600 hover:text-indigo-700">
-              <ChevronRight className="h-5 w-5 shrink-0" />
-            </Link>
+            <div className="flex shrink-0 items-center gap-2">
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                  compliance.length > 0 ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {procedureCountLabel}
+              </span>
+              <Link to="/procedures" className="text-indigo-600 hover:text-indigo-700">
+                <ChevronRight className="h-5 w-5 shrink-0" />
+              </Link>
+            </div>
           </div>
 
-          <div className="mt-5 space-y-3">
-            {!compliance.length ? (
-              <EmptyState message="No hay procedimientos activos para este usuario." />
-            ) : (
-              compliance.slice(0, 4).map((item) => (
+          {compliance.length > 0 ? (
+            <div className="mt-5 space-y-3">
+              {compliance.slice(0, 4).map((item) => (
                 <Link
                   key={item.id}
                   to={`/procedures/${item.procedure_id}`}
@@ -120,27 +137,36 @@ export default function OperatorHomePage() {
                     </span>
                   </div>
                 </Link>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Próximos trainings</h2>
-              <p className="mt-1 text-sm text-gray-500">Continuá tus capacitaciones pendientes.</p>
+              <p className="mt-1 text-sm text-gray-500">Según tu plan de formación</p>
             </div>
-            <Link to="/trainings" className="text-indigo-600 hover:text-indigo-700">
-              <ChevronRight className="h-5 w-5 shrink-0" />
-            </Link>
+            <div className="flex shrink-0 items-center gap-2">
+              <span
+                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                  pendingAssignments.length > 0
+                    ? "bg-indigo-50 text-indigo-700"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {pendingTrainingsCountLabel}
+              </span>
+              <Link to="/trainings" className="text-indigo-600 hover:text-indigo-700">
+                <ChevronRight className="h-5 w-5 shrink-0" />
+              </Link>
+            </div>
           </div>
 
-          <div className="mt-5 space-y-3">
-            {!pendingAssignments.length ? (
-              <EmptyState message="No tenés trainings pendientes en este momento." />
-            ) : (
-              pendingAssignments.slice(0, 4).map((item) => (
+          {pendingAssignments.length > 0 ? (
+            <div className="mt-5 space-y-3">
+              {pendingAssignments.slice(0, 4).map((item) => (
                 <Link
                   key={item.id}
                   to={`/trainings/${item.id}`}
@@ -155,9 +181,9 @@ export default function OperatorHomePage() {
                       : "Sin fecha de vencimiento"}
                   </p>
                 </Link>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          ) : null}
         </section>
       </div>
     </div>
@@ -183,14 +209,6 @@ function SummaryCard({
       </div>
       <p className="mt-4 text-sm font-medium text-gray-900">{label}</p>
       <p className="mt-1 text-xs text-gray-500">{detail}</p>
-    </div>
-  );
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
-      {message}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BookOpen, ChevronRight, Loader2 } from "lucide-react";
+import { BookOpen, ChevronRight, Info, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { getStoredUser } from "@/lib/auth";
@@ -47,7 +47,7 @@ export default function OperatorProceduresPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pt-8">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Procedimientos</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -91,11 +91,18 @@ export default function OperatorProceduresPage() {
       </div>
 
       {!procedures.length ? (
-        <div className="rounded-2xl border-2 border-dashed border-gray-200 py-16 text-center">
-          <BookOpen className="mx-auto h-10 w-10 text-gray-300" />
-          <p className="mt-3 text-sm font-medium text-gray-600">
-            No hay procedimientos asociados a este usuario.
-          </p>
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="flex min-h-[168px] flex-col items-center justify-center px-4 py-10 text-center">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-indigo-50"
+              aria-hidden
+            >
+              <Info className="h-6 w-6 text-indigo-600" strokeWidth={1.75} />
+            </div>
+            <p className="mt-5 max-w-sm text-sm font-medium text-gray-700">
+              Aún no hay procedimientos asociados para tu rol
+            </p>
+          </div>
         </div>
       ) : !filteredProcedures.length ? (
         <div className="rounded-2xl border-2 border-dashed border-gray-200 py-16 text-center">
