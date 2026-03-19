@@ -8,6 +8,7 @@ import {
   GitBranch,
   House,
   Search,
+  Sparkles,
   Users,
 } from "lucide-react";
 
@@ -52,6 +53,7 @@ const navItems: NavItem[] = [
   { to: "/users", label: "Usuarios", icon: Users, roles: ["admin"] },
   { to: "/incidents", label: "Incidentes", icon: AlertTriangle, roles: ["admin", "operator"] },
   { to: "/trainings", label: "Trainings", icon: BookOpen, roles: ["operator"] },
+  { to: "/ai-audits", label: "Auditorías automáticas con IA", icon: Sparkles, roles: ["admin"] },
 ];
 
 const secondaryActionsByRole: Partial<Record<DemoRole, SecondaryAction[]>> = {
