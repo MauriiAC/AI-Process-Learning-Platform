@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ChevronRight, Loader2, Plus } from "lucide-react";
+import { AlertTriangle, ChevronRight, Loader2, Plus, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { incidentSeverityMeta, type IncidentItem, type RoleOption } from "@/lib/operatorData";
@@ -43,107 +43,40 @@ export default function OperatorIncidentsPage() {
     },
   });
 
+  function closeDrawer() {
+    setShowForm(false);
+  }
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6 pt-8">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Incidencias</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Reportá desvíos operativos y consultá el historial general de incidencias.
-          </p>
+    <>
+      <style>{`
+        @keyframes operatorIncidentDrawerFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes operatorIncidentDrawerSlideIn {
+          from { transform: translateX(24px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
+
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Incidencias</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Reportá desvíos operativos y consultá el historial general de incidencias.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
+          >
+            <Plus className="h-4 w-4" />
+            Nueva incidencia
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowForm((value) => !value)}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
-        >
-          <Plus className="h-4 w-4" />
-          Nueva incidencia
-        </button>
-      </div>
-
-      {showForm && (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            createMutation.mutate();
-          }}
-          className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
-        >
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">Descripción</span>
-            <textarea
-              required
-              rows={4}
-              value={form.description}
-              onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              placeholder="Describí lo sucedido y el contexto operativo."
-            />
-          </label>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Severidad</span>
-              <select
-                value={form.severity}
-                onChange={(event) => setForm((current) => ({ ...current, severity: event.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              >
-                <option value="low">Baja</option>
-                <option value="medium">Media</option>
-                <option value="high">Alta</option>
-                <option value="critical">Crítica</option>
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Rol</span>
-              <select
-                value={form.role_id}
-                onChange={(event) => setForm((current) => ({ ...current, role_id: event.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              >
-                <option value="">Sin rol</option>
-                {roles.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Ubicación</span>
-              <input
-                type="text"
-                value={form.location}
-                onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                placeholder="Ej: Sucursal Centro"
-              />
-            </label>
-          </div>
-
-          <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={createMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-            >
-              {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Guardar incidencia
-            </button>
-          </div>
-        </form>
-      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
@@ -193,6 +126,122 @@ export default function OperatorIncidentsPage() {
           })}
         </div>
       )}
-    </div>
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 z-50">
+          <div
+            className="fixed inset-0 bg-black/30"
+            style={{ animation: "operatorIncidentDrawerFadeIn 180ms ease-out" }}
+            onClick={closeDrawer}
+            aria-hidden
+          />
+          <div
+            className="fixed right-0 top-0 flex h-screen w-full max-w-md flex-col bg-white shadow-xl"
+            style={{ animation: "operatorIncidentDrawerSlideIn 220ms ease-out" }}
+          >
+            <form
+              className="flex h-full flex-col"
+              onSubmit={(event) => {
+                event.preventDefault();
+                createMutation.mutate();
+              }}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-6 py-5">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Nueva incidencia</h2>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Completá los datos para registrar el desvío operativo.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeDrawer}
+                  className="rounded-lg border border-gray-300 p-2 text-gray-500 hover:bg-gray-50"
+                  aria-label="Cerrar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">Descripción</span>
+                  <textarea
+                    required
+                    rows={4}
+                    value={form.description}
+                    onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    placeholder="Describí lo sucedido y el contexto operativo."
+                  />
+                </label>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-gray-700">Severidad</span>
+                    <select
+                      value={form.severity}
+                      onChange={(event) => setForm((current) => ({ ...current, severity: event.target.value }))}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    >
+                      <option value="low">Baja</option>
+                      <option value="medium">Media</option>
+                      <option value="high">Alta</option>
+                      <option value="critical">Crítica</option>
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-gray-700">Rol</span>
+                    <select
+                      value={form.role_id}
+                      onChange={(event) => setForm((current) => ({ ...current, role_id: event.target.value }))}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    >
+                      <option value="">Sin rol</option>
+                      {roles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium text-gray-700">Ubicación</span>
+                    <input
+                      type="text"
+                      value={form.location}
+                      onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                      placeholder="Ej: Sucursal Centro"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={closeDrawer}
+                  className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={createMutation.isPending}
+                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
+                >
+                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Guardar incidencia
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
