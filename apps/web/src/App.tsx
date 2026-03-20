@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import Layout from "./components/Layout";
+import AdminAiAuditsPage from "./pages/AdminAiAuditsPage";
 import { getDemoRole, isAuthenticated, type DemoRole } from "./lib/auth";
 import { getHomePath } from "./lib/demoAccess";
 import AdminIncidentsPage from "./pages/AdminIncidentsPage";
@@ -40,6 +41,7 @@ interface AppRoute {
 const appRoutesByRole: Record<DemoRole, AppRoute[]> = {
   admin: [
     { path: "dashboard", element: <DashboardPage /> },
+    { path: "ai-audits", element: <AdminAiAuditsPage /> },
     { path: "users", element: <AdminUsersPage /> },
     { path: "users/new", element: <UserDetailPage /> },
     { path: "users/:id", element: <UserDetailPage /> },
