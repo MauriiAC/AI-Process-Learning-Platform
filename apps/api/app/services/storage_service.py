@@ -36,6 +36,18 @@ async def generate_presigned_url(filename: str, content_type: str) -> tuple[str,
     return presigned_url, storage_key
 
 
+async def generate_presigned_access_url(storage_key: str, expires_in: int = 3600) -> str:
+    client = _get_s3_client()
+    return client.generate_presigned_url(
+        "get_object",
+        Params={
+            "Bucket": settings.S3_BUCKET_NAME,
+            "Key": storage_key,
+        },
+        ExpiresIn=expires_in,
+    )
+
+
 async def download_file(storage_key: str, local_path: str):
     client = _get_s3_client()
     client.download_file(settings.S3_BUCKET_NAME, storage_key, local_path)

@@ -9,3 +9,11 @@ class PresignRequest(BaseModel):
 class PresignResponse(BaseModel):
     presigned_url: str
     storage_key: str
+
+
+class AccessUrlRequest(BaseModel):
+    storage_key: str
+
+
+class AccessUrlResponse(BaseModel):
+    access_url: str

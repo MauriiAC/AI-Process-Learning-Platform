@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowLeft, CheckCircle2, FileText, Loader2, Sparkles, Trash2 } from "lucide-react";
 
+import SourceVideoPlayer from "@/components/SourceVideoPlayer";
 import api from "@/services/api";
 
 interface ProcedureStructure {
@@ -409,6 +410,7 @@ export default function ProcedureDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [ownerRoleId, setOwnerRoleId] = useState("");
+  const [videoJumpRequest, setVideoJumpRequest] = useState<{ range: string; nonce: number } | null>(null);
 
   const { data: procedure, isLoading } = useQuery<ProcedureDetail>({
     queryKey: ["procedure", id],
@@ -500,6 +502,10 @@ export default function ProcedureDetailPage() {
     );
     if (!confirmed) return;
     deleteMutation.mutate();
+  }
+
+  function handleEvidenceClick(range: string) {
+    setVideoJumpRequest({ range, nonce: Date.now() });
   }
 
   return (
@@ -707,11 +713,15 @@ export default function ProcedureDetailPage() {
                   <div key={`${procedure.id}-critical-${index}`} className="rounded-xl border border-gray-200 px-4 py-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-gray-900">{point.text}</p>
-                      {point.evidence?.segment_range && (
-                        <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-500">
+                      {point.evidence?.segment_range ? (
+                        <button
+                          type="button"
+                          onClick={() => handleEvidenceClick(point.evidence?.segment_range ?? "")}
+                          className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-500 transition hover:bg-indigo-50 hover:text-indigo-700"
+                        >
                           Evidencia: {point.evidence.segment_range}
-                        </span>
-                      )}
+                        </button>
+                      ) : null}
                     </div>
                     <p className="mt-1 text-sm leading-6 text-gray-700">{point.why}</p>
                   </div>
@@ -747,11 +757,15 @@ export default function ProcedureDetailPage() {
                       <p className="text-sm font-medium text-gray-800">
                         {index + 1}. {step.title}
                       </p>
-                      {step.evidence?.segment_range && (
-                        <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs text-gray-500">
+                      {step.evidence?.segment_range ? (
+                        <button
+                          type="button"
+                          onClick={() => handleEvidenceClick(step.evidence?.segment_range ?? "")}
+                          className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs text-gray-500 transition hover:bg-indigo-50 hover:text-indigo-700"
+                        >
                           Evidencia: {step.evidence.segment_range}
-                        </span>
-                      )}
+                        </button>
+                      ) : null}
                     </div>
                     <p className="mt-1 text-sm text-gray-600">{step.description}</p>
                     {step.origin && (
@@ -766,6 +780,14 @@ export default function ProcedureDetailPage() {
           ) : null}
         </div>
       </section>
+
+      <SourceVideoPlayer
+        storageKey={latestUpdate?.source_storage_key}
+        mime={latestUpdate?.source_mime}
+        title="Video fuente de la actualización"
+        description="Reproduce el video original asociado a la actualización vigente del procedimiento."
+        jumpToRange={videoJumpRequest}
+      />
 
       {latestUpdate?.source_storage_key && <SourceProcessingStatusCard version={latestUpdate} />}
 

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, FileStack, Loader2, Plus, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import SourceVideoPlayer from "@/components/SourceVideoPlayer";
 import api from "@/services/api";
 
 type StepOrigin = "auto" | "manual";
@@ -43,6 +44,8 @@ interface ProcedureVersion {
   effective_from?: string | null;
   content_text?: string | null;
   content_json?: ProcedureStructure | null;
+  source_storage_key?: string | null;
+  source_mime?: string | null;
   source_result?: {
     structure: ProcedureStructure;
     transcript_raw: string;
@@ -249,6 +252,7 @@ export default function ProcedureUpdatePage() {
   } | null>(null);
   const [processFeedback, setProcessFeedback] = useState<string | null>(null);
   const [showDecisionModal, setShowDecisionModal] = useState(false);
+  const [videoJumpRequest, setVideoJumpRequest] = useState<{ range: string; nonce: number } | null>(null);
 
   const { data: procedure, isLoading } = useQuery<ProcedureDetail>({
     queryKey: ["procedure", id],
@@ -326,6 +330,10 @@ export default function ProcedureUpdatePage() {
         edited: false,
       },
     ]);
+  }
+
+  function handleEvidenceClick(range: string) {
+    setVideoJumpRequest({ range, nonce: Date.now() });
   }
 
   const processSourceMutation = useMutation({
@@ -488,6 +496,24 @@ export default function ProcedureUpdatePage() {
         </div>
       </div>
 
+      <SourceVideoPlayer
+        storageKey={latestUpdate?.source_storage_key}
+        mime={latestUpdate?.source_mime}
+        title="Video fuente vigente"
+        description="Usa este video como referencia mientras editas la estructura actual del procedimiento."
+        jumpToRange={!processedSource ? videoJumpRequest : null}
+      />
+
+      {processedSource && (
+        <SourceVideoPlayer
+          storageKey={processedSource.sourceAsset.storage_key}
+          mime={processedSource.sourceAsset.mime}
+          title="Nueva fuente procesada"
+          description="Este es el video nuevo que acabas de procesar y que se guardará si confirmas la actualización."
+          jumpToRange={videoJumpRequest}
+        />
+      )}
+
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -600,9 +626,13 @@ export default function ProcedureUpdatePage() {
                           {badge.label}
                         </span>
                         {step.evidenceSegmentRange && (
-                          <span className="rounded-full bg-gray-50 px-2.5 py-1 text-[11px] text-gray-500">
+                          <button
+                            type="button"
+                            onClick={() => handleEvidenceClick(step.evidenceSegmentRange)}
+                            className="rounded-full bg-gray-50 px-2.5 py-1 text-[11px] text-gray-500 transition hover:bg-indigo-50 hover:text-indigo-700"
+                          >
                             Fuente: {step.evidenceSegmentRange}
-                          </span>
+                          </button>
                         )}
                       </div>
                       <button
@@ -688,6 +718,15 @@ export default function ProcedureUpdatePage() {
                   <div key={`${point?.text || "critical"}-${index}`} className="rounded-xl bg-gray-50 px-4 py-3">
                     <p className="text-sm font-medium text-gray-900">{point?.text || "Punto crítico"}</p>
                     {point?.why && <p className="mt-1 text-sm text-gray-600">{point.why}</p>}
+                    {point?.evidence?.segment_range && (
+                      <button
+                        type="button"
+                        onClick={() => handleEvidenceClick(point.evidence!.segment_range!)}
+                        className="mt-2 text-xs text-gray-400 transition hover:text-indigo-700"
+                      >
+                        Evidencia: {point.evidence.segment_range}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

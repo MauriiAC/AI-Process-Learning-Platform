@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, BookOpenCheck, ClipboardList, Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
+import SourceVideoPlayer from "@/components/SourceVideoPlayer";
 import { getStoredUser } from "@/lib/auth";
 import { readStatusMeta, trainingStatusMeta, type ComplianceItem } from "@/lib/operatorData";
 import api from "@/services/api";
@@ -25,6 +26,8 @@ interface ProcedureVersion {
   status: string;
   content_text?: string | null;
   content_json?: ProcedureStructure | null;
+  source_storage_key?: string | null;
+  source_mime?: string | null;
   source_result?: {
     structure?: ProcedureStructure;
   } | null;
@@ -48,6 +51,7 @@ export default function OperatorProcedureDetailPage() {
   const { id } = useParams<{ id: string }>();
   const user = getStoredUser();
   const queryClient = useQueryClient();
+  const [videoJumpRequest, setVideoJumpRequest] = useState<{ range: string; nonce: number } | null>(null);
 
   const { data: compliance = [], isLoading: complianceLoading } = useQuery<ComplianceItem[]>({
     queryKey: ["operator-procedure-compliance", user?.id],
@@ -73,6 +77,10 @@ export default function OperatorProcedureDetailPage() {
   const displayStructure = latestVersion?.content_json ?? latestVersion?.source_result?.structure ?? null;
   const readStatus = complianceItem ? readStatusMeta[complianceItem.read_status] : null;
   const trainingStatus = complianceItem ? trainingStatusMeta[complianceItem.training_status] : null;
+
+  function handleEvidenceClick(range: string) {
+    setVideoJumpRequest({ range, nonce: Date.now() });
+  }
 
   const markAsReadMutation = useMutation({
     mutationFn: () => api.post(`/compliance/${complianceItem?.id}/mark-read`).then((r) => r.data),
@@ -184,6 +192,14 @@ export default function OperatorProcedureDetailPage() {
         </div>
       </div>
 
+      <SourceVideoPlayer
+        storageKey={latestVersion?.source_storage_key}
+        mime={latestVersion?.source_mime}
+        title="Video fuente"
+        description="Reproduce el video original usado para generar este procedimiento."
+        jumpToRange={videoJumpRequest}
+      />
+
       {displayStructure ? (
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -197,7 +213,13 @@ export default function OperatorProcedureDetailPage() {
                   <h3 className="mt-1 text-sm font-semibold text-gray-900">{step.title}</h3>
                   <p className="mt-2 text-sm text-gray-600">{step.description}</p>
                   {step.evidence?.segment_range && (
-                    <p className="mt-2 text-xs text-gray-400">Evidencia: {step.evidence.segment_range}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleEvidenceClick(step.evidence!.segment_range!)}
+                      className="mt-2 text-xs text-gray-400 transition hover:text-indigo-700"
+                    >
+                      Evidencia: {step.evidence.segment_range}
+                    </button>
                   )}
                 </div>
               ))}
@@ -227,6 +249,15 @@ export default function OperatorProcedureDetailPage() {
                   <div key={`${point.text}-${index}`} className="rounded-xl bg-gray-50 p-4">
                     <p className="text-sm font-medium text-gray-900">{point.text}</p>
                     <p className="mt-1 text-sm text-gray-600">{point.why}</p>
+                    {point.evidence?.segment_range && (
+                      <button
+                        type="button"
+                        onClick={() => handleEvidenceClick(point.evidence!.segment_range!)}
+                        className="mt-2 text-xs text-gray-400 transition hover:text-indigo-700"
+                      >
+                        Evidencia: {point.evidence.segment_range}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
