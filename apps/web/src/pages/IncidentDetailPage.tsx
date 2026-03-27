@@ -31,7 +31,7 @@ interface IncidentRecord {
   id: string;
   description: string;
   severity: string;
-  status: "open" | "closed";
+  status: "open" | "resolved_by_operator" | "escalated" | "closed";
   role_id?: string | null;
   role_name?: string | null;
   role_code?: string | null;
@@ -39,6 +39,17 @@ interface IncidentRecord {
   created_at: string;
   closed_at?: string | null;
   closed_by?: string | null;
+  operator_comment?: string | null;
+  operator_resolution_by?: string | null;
+  operator_resolution_by_name?: string | null;
+  operator_resolution_at?: string | null;
+  operator_selected_procedure_id?: string | null;
+  operator_selected_procedure_version_id?: string | null;
+  operator_selected_procedure_title?: string | null;
+  operator_selected_procedure_version_number?: number | null;
+  operator_selected_related_run_id?: string | null;
+  operator_selected_related_incident_id?: string | null;
+  operator_selected_related_incident_description?: string | null;
 }
 
 interface ProcedurePreviewMatch {
@@ -162,11 +173,15 @@ const severityLabel: Record<string, string> = {
 
 const statusMeta: Record<IncidentRecord["status"], string> = {
   open: "bg-indigo-50 text-indigo-700",
+  resolved_by_operator: "bg-emerald-50 text-emerald-700",
+  escalated: "bg-amber-50 text-amber-700",
   closed: "bg-slate-100 text-slate-700",
 };
 
 const statusLabel: Record<IncidentRecord["status"], string> = {
   open: "Abierta",
+  resolved_by_operator: "Resuelta por operador",
+  escalated: "Escalada",
   closed: "Cerrada",
 };
 
@@ -666,6 +681,47 @@ export default function IncidentDetailPage() {
           </div>
         </div>
       </div>
+
+      {!isCreating && incident && (incident.operator_comment || incident.operator_resolution_at) && (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-emerald-900">Resolución operativa del operador</h2>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-emerald-900">
+                {incident.operator_comment || "No hay comentario operativo cargado."}
+              </p>
+            </div>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusMeta[incident.status]}`}>
+              {statusLabel[incident.status]}
+            </span>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs text-emerald-900/90">
+            {incident.operator_resolution_at && (
+              <span className="rounded-full bg-white/80 px-2.5 py-1">
+                Registrada el {new Date(incident.operator_resolution_at).toLocaleString("es-AR")}
+              </span>
+            )}
+            {incident.operator_resolution_by_name && (
+              <span className="rounded-full bg-white/80 px-2.5 py-1">
+                Operador: {incident.operator_resolution_by_name}
+              </span>
+            )}
+            {incident.operator_selected_procedure_title && (
+              <span className="rounded-full bg-white/80 px-2.5 py-1">
+                Procedimiento usado: {incident.operator_selected_procedure_title}
+                {incident.operator_selected_procedure_version_number != null
+                  ? ` · v${incident.operator_selected_procedure_version_number}`
+                  : ""}
+              </span>
+            )}
+            {incident.operator_selected_related_incident_description && (
+              <span className="rounded-full bg-white/80 px-2.5 py-1">
+                Precedente usado: {incident.operator_selected_related_incident_description}
+              </span>
+            )}
+          </div>
+        </section>
+      )}
 
       {(isCreating || isEditingIncident) && (
         <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-200 bg-white p-6">

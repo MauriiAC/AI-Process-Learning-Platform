@@ -13,7 +13,7 @@ from app.models.task import Task
 from app.models.user import User
 from app.schemas.task import TaskCreate, TaskOut, TaskUpdate, TrainingSuggestion
 from app.services.embedding_service import get_embedding
-from app.services.search_service import rank_procedure_versions_by_embedding
+from app.services.search_service import MIN_SEMANTIC_SEARCH_SCORE, rank_procedure_versions_by_embedding
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -237,7 +237,12 @@ async def suggest_trainings_for_task(
     if task.embedding is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task has no embedding")
 
-    matches = await rank_procedure_versions_by_embedding(task.embedding, limit=10, db=db, min_score=0.5)
+    matches = await rank_procedure_versions_by_embedding(
+        task.embedding,
+        limit=10,
+        db=db,
+        min_score=MIN_SEMANTIC_SEARCH_SCORE,
+    )
     return [
         TrainingSuggestion(
             procedure_id=match["procedure_id"],

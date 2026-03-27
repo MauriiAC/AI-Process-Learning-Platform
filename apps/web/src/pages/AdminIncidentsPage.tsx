@@ -9,7 +9,7 @@ interface IncidentItem {
   id: string;
   description: string;
   severity: string;
-  status: "open" | "closed";
+  status: "open" | "resolved_by_operator" | "escalated" | "closed";
   role_name?: string | null;
   location?: string | null;
   created_at: string;
@@ -32,11 +32,15 @@ const severityLabel: Record<string, string> = {
 
 const statusMeta: Record<IncidentItem["status"], string> = {
   open: "bg-indigo-50 text-indigo-700",
+  resolved_by_operator: "bg-emerald-50 text-emerald-700",
+  escalated: "bg-amber-50 text-amber-700",
   closed: "bg-slate-100 text-slate-700",
 };
 
 const statusLabel: Record<IncidentItem["status"], string> = {
   open: "Abierta",
+  resolved_by_operator: "Resuelta por operador",
+  escalated: "Escalada",
   closed: "Cerrada",
 };
 
@@ -55,6 +59,8 @@ export default function AdminIncidentsPage() {
     () => ({
       all: incidents?.length ?? 0,
       open: incidents?.filter((incident) => incident.status === "open").length ?? 0,
+      resolved_by_operator: incidents?.filter((incident) => incident.status === "resolved_by_operator").length ?? 0,
+      escalated: incidents?.filter((incident) => incident.status === "escalated").length ?? 0,
       closed: incidents?.filter((incident) => incident.status === "closed").length ?? 0,
     }),
     [incidents],
@@ -82,6 +88,8 @@ export default function AdminIncidentsPage() {
         {[
           { value: "all" as const, label: "Todas", count: counts.all },
           { value: "open" as const, label: "Abiertas", count: counts.open },
+          { value: "resolved_by_operator" as const, label: "Resueltas por operador", count: counts.resolved_by_operator },
+          { value: "escalated" as const, label: "Escaladas", count: counts.escalated },
           { value: "closed" as const, label: "Cerradas", count: counts.closed },
         ].map((filter) => (
           <button

@@ -10,7 +10,7 @@ from app.models.change_event import ChangeEvent, ProcedureImpactAssessment
 from app.models.user import User
 from app.schemas.change_event import ChangeEventCreate, ChangeEventOut, ProcedureImpactAssessmentOut
 from app.services.embedding_service import get_embedding
-from app.services.search_service import rank_procedure_versions_by_embedding
+from app.services.search_service import MIN_SEMANTIC_SEARCH_SCORE, rank_procedure_versions_by_embedding
 
 router = APIRouter(prefix="/change-events", tags=["change-events"])
 
@@ -98,7 +98,12 @@ async def analyze_change_event_impact(
     await db.flush()
 
     results: list[ProcedureImpactAssessment] = []
-    matches = await rank_procedure_versions_by_embedding(change_event.embedding, limit=5, db=db, min_score=0.5)
+    matches = await rank_procedure_versions_by_embedding(
+        change_event.embedding,
+        limit=5,
+        db=db,
+        min_score=MIN_SEMANTIC_SEARCH_SCORE,
+    )
     for match in matches:
         confidence = match["score"]
         impact_level = "high" if confidence >= 0.8 else "medium" if confidence >= 0.6 else "low"

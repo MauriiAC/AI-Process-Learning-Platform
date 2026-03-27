@@ -41,9 +41,10 @@ from app.services.incident_memory_service import (
     build_finding_memory_line,
     get_similar_incident_analysis_runs,
 )
-from app.services.search_service import rank_procedure_versions_by_embedding
+from app.services.search_service import MIN_SEMANTIC_SEARCH_SCORE, rank_procedure_versions_by_embedding
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
+OPERATOR_RESOLUTION_STATUSES = {"resolved_by_operator", "escalated"}
 INCIDENT_REDEFINITION_HINTS = (
     "cambiar",
     "cambio",
@@ -73,7 +74,25 @@ def _analysis_run_query():
     return select(IncidentAnalysisRun).options(*analysis_run_load_options())
 
 
+def _incident_load_options():
+    return (
+        selectinload(Incident.role),
+        selectinload(Incident.operator_resolution_user),
+        selectinload(Incident.operator_selected_procedure_version).selectinload(ProcedureVersion.procedure),
+        selectinload(Incident.operator_selected_related_run).selectinload(IncidentAnalysisRun.incident),
+    )
+
+
+def _incident_query():
+    return select(Incident).options(*_incident_load_options())
+
+
 def _incident_out(item: Incident) -> IncidentOut:
+    selected_version = getattr(item, "operator_selected_procedure_version", None)
+    selected_procedure = getattr(selected_version, "procedure", None) if selected_version is not None else None
+    selected_run = getattr(item, "operator_selected_related_run", None)
+    selected_related_incident = getattr(selected_run, "incident", None) if selected_run is not None else None
+    resolution_user = getattr(item, "operator_resolution_user", None)
     return IncidentOut(
         id=item.id,
         description=item.description,
@@ -87,6 +106,23 @@ def _incident_out(item: Incident) -> IncidentOut:
         created_at=item.created_at,
         closed_by=item.closed_by,
         closed_at=item.closed_at,
+        operator_comment=item.operator_comment,
+        operator_resolution_by=item.operator_resolution_by,
+        operator_resolution_by_name=resolution_user.name if resolution_user is not None else None,
+        operator_resolution_at=item.operator_resolution_at,
+        operator_selected_procedure_id=selected_procedure.id if selected_procedure is not None else None,
+        operator_selected_procedure_version_id=item.operator_selected_procedure_version_id,
+        operator_selected_procedure_title=selected_procedure.title if selected_procedure is not None else None,
+        operator_selected_procedure_version_number=(
+            selected_version.version_number if selected_version is not None else None
+        ),
+        operator_selected_related_run_id=item.operator_selected_related_run_id,
+        operator_selected_related_incident_id=(
+            selected_related_incident.id if selected_related_incident is not None else None
+        ),
+        operator_selected_related_incident_description=(
+            selected_related_incident.description if selected_related_incident is not None else None
+        ),
     )
 
 
@@ -174,6 +210,14 @@ def _apply_incident_status_change(incident: Incident, next_status: str, current_
         return
     incident.closed_at = None
     incident.closed_by = None
+    if next_status in OPERATOR_RESOLUTION_STATUSES:
+        incident.operator_resolution_at = datetime.now(timezone.utc)
+        incident.operator_resolution_by = current_user.id
+
+
+def _touch_operator_resolution(incident: Incident, current_user: User) -> None:
+    incident.operator_resolution_at = datetime.now(timezone.utc)
+    incident.operator_resolution_by = current_user.id
 
 
 def _default_action_for_type(finding_type: str) -> str:
@@ -256,22 +300,20 @@ async def create_incident(
     )
     db.add(incident)
     await db.commit()
-    result = await db.execute(select(Incident).where(Incident.id == incident.id).options(selectinload(Incident.role)))
+    result = await db.execute(_incident_query().where(Incident.id == incident.id))
     incident = result.scalar_one()
     return _incident_out(incident)
 
 
 @router.get("", response_model=list[IncidentOut])
 async def list_incidents(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Incident).order_by(Incident.created_at.desc()).options(selectinload(Incident.role)))
+    result = await db.execute(_incident_query().order_by(Incident.created_at.desc()))
     return [_incident_out(item) for item in result.scalars().all()]
 
 
 @router.get("/{incident_id}", response_model=IncidentOut)
 async def get_incident(incident_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    incident = (
-        await db.execute(select(Incident).where(Incident.id == incident_id).options(selectinload(Incident.role)))
-    ).scalar_one_or_none()
+    incident = (await db.execute(_incident_query().where(Incident.id == incident_id))).scalar_one_or_none()
     if incident is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
     return _incident_out(incident)
@@ -289,10 +331,39 @@ async def update_incident(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
     changes = payload.model_dump(exclude_unset=True)
+    if "operator_comment" in changes:
+        changes["operator_comment"] = (changes["operator_comment"] or "").strip() or None
     if "role_id" in changes and changes["role_id"] is not None:
         role = (await db.execute(select(Role).where(Role.id == changes["role_id"]))).scalar_one_or_none()
         if role is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    if "operator_selected_procedure_version_id" in changes and changes["operator_selected_procedure_version_id"] is not None:
+        version = (
+            await db.execute(
+                select(ProcedureVersion.id).where(
+                    ProcedureVersion.id == changes["operator_selected_procedure_version_id"]
+                )
+            )
+        ).scalar_one_or_none()
+        if version is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Procedure version not found")
+    if "operator_selected_related_run_id" in changes and changes["operator_selected_related_run_id"] is not None:
+        related_run = (
+            await db.execute(
+                select(IncidentAnalysisRun.id).where(
+                    IncidentAnalysisRun.id == changes["operator_selected_related_run_id"]
+                )
+            )
+        ).scalar_one_or_none()
+        if related_run is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Related analysis run not found")
+
+    next_status = changes.get("status", incident.status)
+    if "status" in changes and next_status in OPERATOR_RESOLUTION_STATUSES and not changes.get("operator_comment"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Operator comment is required when marking an incident as resolved or escalated",
+        )
 
     for field, value in changes.items():
         if field == "status":
@@ -302,11 +373,16 @@ async def update_incident(
 
     if "description" in changes and changes["description"]:
         incident.embedding = await get_embedding(changes["description"])
+    if next_status in OPERATOR_RESOLUTION_STATUSES and {
+        "operator_comment",
+        "operator_selected_procedure_version_id",
+        "operator_selected_related_run_id",
+        "status",
+    }.intersection(changes):
+        _touch_operator_resolution(incident, current_user)
 
     await db.commit()
-    incident = (
-        await db.execute(select(Incident).where(Incident.id == incident_id).options(selectinload(Incident.role)))
-    ).scalar_one()
+    incident = (await db.execute(_incident_query().where(Incident.id == incident_id))).scalar_one()
     return _incident_out(incident)
 
 
@@ -338,7 +414,12 @@ async def suggest_trainings_for_incident(
     if incident.embedding is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incident has no embedding")
 
-    matches = await rank_procedure_versions_by_embedding(incident.embedding, limit=10, db=db, min_score=0.5)
+    matches = await rank_procedure_versions_by_embedding(
+        incident.embedding,
+        limit=10,
+        db=db,
+        min_score=MIN_SEMANTIC_SEARCH_SCORE,
+    )
     return [
         TrainingSuggestion(
             procedure_id=match["procedure_id"],
@@ -457,7 +538,12 @@ async def analyze_incident_procedures(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Closed incidents cannot be analyzed")
 
     related_incidents = await get_similar_incident_analysis_runs(incident_id, incident.embedding, db=db)
-    matches = await rank_procedure_versions_by_embedding(incident.embedding, limit=5, db=db, min_score=0.5)
+    matches = await rank_procedure_versions_by_embedding(
+        incident.embedding,
+        limit=5,
+        db=db,
+        min_score=MIN_SEMANTIC_SEARCH_SCORE,
+    )
     return IncidentAnalysisPreviewOut(
         procedure_matches=[
             IncidentProcedurePreviewOut(

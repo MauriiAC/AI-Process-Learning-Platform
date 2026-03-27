@@ -12,7 +12,7 @@ class IncidentCreate(BaseModel):
     location: str | None = None
 
 
-IncidentStatus = Literal["open", "closed"]
+IncidentStatus = Literal["open", "resolved_by_operator", "escalated", "closed"]
 
 
 class IncidentUpdate(BaseModel):
@@ -21,6 +21,9 @@ class IncidentUpdate(BaseModel):
     status: IncidentStatus | None = None
     role_id: uuid.UUID | None = None
     location: str | None = None
+    operator_comment: str | None = None
+    operator_selected_procedure_version_id: uuid.UUID | None = None
+    operator_selected_related_run_id: uuid.UUID | None = None
 
 
 class IncidentOut(BaseModel):
@@ -36,6 +39,17 @@ class IncidentOut(BaseModel):
     created_at: datetime
     closed_by: uuid.UUID | None = None
     closed_at: datetime | None = None
+    operator_comment: str | None = None
+    operator_resolution_by: uuid.UUID | None = None
+    operator_resolution_by_name: str | None = None
+    operator_resolution_at: datetime | None = None
+    operator_selected_procedure_id: uuid.UUID | None = None
+    operator_selected_procedure_version_id: uuid.UUID | None = None
+    operator_selected_procedure_title: str | None = None
+    operator_selected_procedure_version_number: int | None = None
+    operator_selected_related_run_id: uuid.UUID | None = None
+    operator_selected_related_incident_id: uuid.UUID | None = None
+    operator_selected_related_incident_description: str | None = None
 
     model_config = {"from_attributes": True}
 

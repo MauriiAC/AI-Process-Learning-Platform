@@ -92,10 +92,26 @@ export interface IncidentItem {
   id: string;
   description: string;
   severity: string;
+  status: IncidentStatus;
   role_id?: string | null;
   role_name?: string | null;
+  role_code?: string | null;
   location?: string | null;
+  created_by?: string;
   created_at: string;
+  closed_by?: string | null;
+  closed_at?: string | null;
+  operator_comment?: string | null;
+  operator_resolution_by?: string | null;
+  operator_resolution_by_name?: string | null;
+  operator_resolution_at?: string | null;
+  operator_selected_procedure_id?: string | null;
+  operator_selected_procedure_version_id?: string | null;
+  operator_selected_procedure_title?: string | null;
+  operator_selected_procedure_version_number?: number | null;
+  operator_selected_related_run_id?: string | null;
+  operator_selected_related_incident_id?: string | null;
+  operator_selected_related_incident_description?: string | null;
 }
 
 export interface RoleOption {
@@ -119,4 +135,13 @@ export const incidentSeverityMeta: Record<string, { label: string; className: st
   medium: { label: "Media", className: "bg-orange-100 text-orange-800" },
   high: { label: "Alta", className: "bg-red-100 text-red-800" },
   critical: { label: "Crítica", className: "bg-red-200 text-red-900" },
+};
+
+export type IncidentStatus = "open" | "resolved_by_operator" | "escalated" | "closed";
+
+export const incidentStatusMeta: Record<IncidentStatus, { label: string; className: string }> = {
+  open: { label: "Abierta", className: "bg-indigo-100 text-indigo-800" },
+  resolved_by_operator: { label: "Resuelta por operador", className: "bg-emerald-100 text-emerald-800" },
+  escalated: { label: "Escalada", className: "bg-amber-100 text-amber-800" },
+  closed: { label: "Cerrada", className: "bg-slate-100 text-slate-700" },
 };

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ChevronRight, Loader2, Plus, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { incidentSeverityMeta, type IncidentItem, type RoleOption } from "@/lib/operatorData";
+import { incidentSeverityMeta, incidentStatusMeta, type IncidentItem, type RoleOption } from "@/lib/operatorData";
 import api from "@/services/api";
 
 export default function OperatorIncidentsPage() {
@@ -94,6 +94,10 @@ export default function OperatorIncidentsPage() {
               label: incident.severity,
               className: "bg-gray-100 text-gray-700",
             };
+            const incidentStatus = incidentStatusMeta[incident.status] ?? {
+              label: incident.status,
+              className: "bg-gray-100 text-gray-700",
+            };
 
             return (
               <Link
@@ -106,6 +110,9 @@ export default function OperatorIncidentsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${severity.className}`}>
                         {severity.label}
+                      </span>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${incidentStatus.className}`}>
+                        {incidentStatus.label}
                       </span>
                       {incident.role_name && (
                         <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">

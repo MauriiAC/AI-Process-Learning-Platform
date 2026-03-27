@@ -8,6 +8,8 @@ from app.models.training import Training
 from app.schemas.search import SearchResult
 from app.services.embedding_service import get_embedding
 
+MIN_SEMANTIC_SEARCH_SCORE = 0.6
+
 
 def _build_step_match(row, score: float) -> dict:
     reference = row.reference_json if isinstance(row.reference_json, dict) else {}
@@ -188,5 +190,10 @@ async def rank_procedure_versions_by_embedding(
 
 async def semantic_search(query: str, limit: int, db: AsyncSession) -> list[SearchResult]:
     query_embedding = await get_embedding(query)
-    matches = await rank_procedure_versions_by_embedding(query_embedding, limit=limit, db=db, min_score=0.55)
+    matches = await rank_procedure_versions_by_embedding(
+        query_embedding,
+        limit=limit,
+        db=db,
+        min_score=MIN_SEMANTIC_SEARCH_SCORE,
+    )
     return [SearchResult(**match) for match in matches]

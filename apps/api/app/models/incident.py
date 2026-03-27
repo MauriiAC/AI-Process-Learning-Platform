@@ -22,10 +22,43 @@ class Incident(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     closed_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    operator_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    operator_resolution_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+    operator_resolution_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    operator_selected_procedure_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("procedure_versions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    operator_selected_related_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("incident_analysis_runs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     embedding = mapped_column(Vector(3072), nullable=True)
 
-    analysis_runs = relationship("IncidentAnalysisRun", back_populates="incident", lazy="selectin")
+    analysis_runs = relationship(
+        "IncidentAnalysisRun",
+        back_populates="incident",
+        foreign_keys="IncidentAnalysisRun.incident_id",
+        lazy="selectin",
+    )
     role = relationship("Role", lazy="selectin")
+    operator_resolution_user = relationship("User", foreign_keys=[operator_resolution_by], lazy="selectin")
+    operator_selected_procedure_version = relationship(
+        "ProcedureVersion",
+        foreign_keys=[operator_selected_procedure_version_id],
+        lazy="selectin",
+    )
+    operator_selected_related_run = relationship(
+        "IncidentAnalysisRun",
+        foreign_keys=[operator_selected_related_run_id],
+        lazy="selectin",
+    )
 
 
 class IncidentTrainingLink(Base):
@@ -49,7 +82,12 @@ class IncidentAnalysisRun(Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-    incident = relationship("Incident", back_populates="analysis_runs", lazy="selectin")
+    incident = relationship(
+        "Incident",
+        back_populates="analysis_runs",
+        foreign_keys=[incident_id],
+        lazy="selectin",
+    )
     findings = relationship(
         "IncidentAnalysisFinding",
         back_populates="analysis_run",
