@@ -7,6 +7,10 @@ from sqlalchemy.orm import selectinload
 from app.models.incident import Incident, IncidentAnalysisFinding, IncidentAnalysisRun, IncidentRelatedMatch
 from app.models.procedure import ProcedureVersion
 from app.models.training import Training
+from app.services.incident_semantic_service import (
+    MIN_COMPATIBILITY_FOR_RESULT,
+    category_compatibility_score,
+)
 
 
 def analysis_run_load_options():
@@ -36,7 +40,8 @@ async def get_similar_incident_analysis_runs(
     incident_embedding,
     db: AsyncSession,
     limit: int = 3,
-    min_score: float = 0.55,
+    min_score: float = 0.6,
+    incident_category: str | None = None,
 ) -> list[dict]:
     if incident_embedding is None:
         return []
@@ -46,6 +51,7 @@ async def get_similar_incident_analysis_runs(
             select(
                 Incident.id,
                 Incident.description,
+                Incident.incident_category,
                 Incident.embedding.cosine_distance(incident_embedding).label("distance"),
             )
             .where(Incident.id != incident_id, Incident.embedding.isnot(None))
@@ -56,8 +62,12 @@ async def get_similar_incident_analysis_runs(
 
     matches: list[dict] = []
     for row in rows:
+        compatibility = category_compatibility_score(incident_category, row.incident_category)
+        if incident_category and compatibility < MIN_COMPATIBILITY_FOR_RESULT:
+            continue
         similarity = max(0.0, min(1.0, 1 - float(row.distance or 1)))
-        if similarity < min_score:
+        adjusted_similarity = similarity * compatibility if incident_category else similarity
+        if adjusted_similarity < min_score:
             continue
 
         prior_run = (
@@ -75,7 +85,7 @@ async def get_similar_incident_analysis_runs(
             {
                 "incident_id": row.id,
                 "description": row.description,
-                "similarity_score": similarity,
+                "similarity_score": adjusted_similarity,
                 "analysis_run": prior_run,
             }
         )

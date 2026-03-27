@@ -6,6 +6,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { getDemoRole, getStoredUser } from "@/lib/auth";
 import type { AssignmentItem, IncidentItem } from "@/lib/operatorData";
+import { getSemanticScoreDetail, getSemanticScoreLabel } from "@/lib/semanticScore";
 
 interface SearchResult {
   procedure_id: string;
@@ -123,7 +124,8 @@ export default function SearchPage() {
                         </h3>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                           <p className="text-indigo-600">Versión relevante: v{r.version_number}</p>
-                          <p className="text-gray-500">Relación: {(r.score * 100).toFixed(0)}%</p>
+                          <p className="text-gray-500">{getSemanticScoreLabel(r.score)}</p>
+                          <p className="text-gray-400">{getSemanticScoreDetail(r.score)}</p>
                         </div>
                         {r.step_title && (
                           <p className="mt-2 text-xs font-medium text-gray-500">

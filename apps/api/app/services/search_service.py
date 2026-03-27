@@ -7,6 +7,12 @@ from app.models.semantic_segment import SemanticSegment
 from app.models.training import Training
 from app.schemas.search import SearchResult
 from app.services.embedding_service import get_embedding
+from app.services.incident_semantic_service import (
+    MIN_COMPATIBILITY_FOR_RESULT,
+    category_compatibility_score,
+    entity_overlap_bonus,
+    infer_procedure_category,
+)
 
 MIN_SEMANTIC_SEARCH_SCORE = 0.6
 
@@ -74,6 +80,8 @@ async def rank_procedure_versions_by_embedding(
     limit: int,
     db: AsyncSession,
     min_score: float = 0.0,
+    context_category: str | None = None,
+    context_entities: list[str] | None = None,
 ) -> list[dict]:
     latest_versions = _latest_procedure_versions_subquery()
     candidate_matches: list[tuple[int, float, dict]] = []
@@ -174,18 +182,38 @@ async def rank_procedure_versions_by_embedding(
         if version is None:
             continue
         match = match_by_version_id[version_id]
+        candidate_category = infer_procedure_category(
+            procedure_code=version.code,
+            procedure_title=version.title,
+            text=match["snippet"],
+        )
+        compatibility = category_compatibility_score(context_category, candidate_category)
+        if context_category and compatibility < MIN_COMPATIBILITY_FOR_RESULT:
+            continue
+        adjusted_score = round(
+            min(
+                1.0,
+                (match["score"] * compatibility if context_category else match["score"])
+                + entity_overlap_bonus(context_entities, f"{version.code} {version.title} {match['snippet']}"),
+            ),
+            4,
+        )
+        if adjusted_score < min_score:
+            continue
         results.append(
             {
                 **match,
+                "score": adjusted_score,
                 "procedure_id": version.procedure_id,
                 "procedure_code": version.code,
                 "procedure_title": version.title,
                 "version_number": version.version_number,
                 "training_id": version.training_id,
                 "training_title": version.training_title,
+                "semantic_category": candidate_category,
             }
         )
-    return results
+    return sorted(results, key=lambda item: -item["score"])[:limit]
 
 
 async def semantic_search(query: str, limit: int, db: AsyncSession) -> list[SearchResult]:

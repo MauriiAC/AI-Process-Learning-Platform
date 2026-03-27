@@ -43,6 +43,7 @@ from app.models.user import User
 from app.models.video_frame import VideoFrame
 from app.services.compliance_service import sync_user_procedure_compliance
 from app.services.embedding_service import get_embedding
+from app.services.incident_semantic_service import build_incident_embedding_input
 
 _embedding_counter = 0
 
@@ -229,6 +230,9 @@ DEMO_INCIDENTS = [
         "severity": "high",
         "role_code": "cashier",
         "location": "Córdoba",
+        "incident_type": "customer_claim",
+        "incident_category": "process_compliance",
+        "incident_entities": ["pickup", "handoff", "doble chequeo"],
         "embedding_text": "pedido pickup incompleto doble chequeo final inexistente entrega cliente",
         "analysis_summary": (
             "El flujo actual cubre picking y entrega, pero no existe un control final formal de integridad "
@@ -259,6 +263,9 @@ DEMO_INCIDENTS = [
         "severity": "medium",
         "role_code": "shift-supervisor",
         "location": "Buenos Aires",
+        "incident_type": "customer_claim",
+        "incident_category": "pricing_billing",
+        "incident_entities": ["precio", "góndola", "caja", "promoción"],
         "embedding_text": "precio góndola distinto caja criterio escalamiento evidencia promoción",
         "analysis_summary": (
             "Existe un control de etiquetas, pero el procedimiento no define cómo actuar ante diferencias "
@@ -289,6 +296,9 @@ DEMO_INCIDENTS = [
         "severity": "high",
         "role_code": "fresh-food-operator",
         "location": "Buenos Aires",
+        "incident_type": "operational_deviation",
+        "incident_category": "food_safety",
+        "incident_entities": ["lácteos", "temperatura", "aislamiento", "registro"],
         "embedding_text": "lácteos temperatura fuera de rango sin registro ni aislamiento",
         "analysis_summary": (
             "El procedimiento de cadena de frío existe y describe medición, registro y aislamiento, pero no se "
@@ -603,10 +613,10 @@ async def wipe_demo_data(db) -> None:
 async def wipe_all_data(db) -> None:
     log_progress("wipe full: eliminando toda la base")
     existing_tables = await get_existing_table_names(db)
-    for table in reversed(Base.metadata.sorted_tables):
-        if table.name in existing_tables:
-            await db.execute(table.delete())
-    await db.flush()
+    table_names = [table.name for table in Base.metadata.sorted_tables if table.name in existing_tables]
+    if table_names:
+        joined_names = ", ".join(f'"{name}"' for name in table_names)
+        await db.execute(text(f"TRUNCATE TABLE {joined_names} RESTART IDENTITY CASCADE"))
     log_progress("wipe full: completo")
 
 
@@ -1079,27 +1089,51 @@ async def seed(mode: str = "demo"):
                 await db.execute(select(Incident).where(Incident.description == item["description"]))
             ).scalar_one_or_none()
             if incident is None:
+                embedding_text = build_incident_embedding_input(
+                    description=item["description"],
+                    severity=item["severity"],
+                    location=item["location"],
+                    role_code=item["role_code"],
+                    incident_type=item["incident_type"],
+                    incident_category=item["incident_category"],
+                    incident_entities=item["incident_entities"],
+                )
                 incident = Incident(
                     description=item["description"],
                     severity=item["severity"],
                     status="open",
+                    incident_type=item["incident_type"],
+                    incident_category=item["incident_category"],
+                    incident_entities_json=item["incident_entities"],
                     role_id=roles[item["role_code"]].id,
                     location=item["location"],
                     created_by=admin.id,
                     closed_by=None,
                     closed_at=None,
-                    embedding=await safe_embedding(item["embedding_text"], label=f"incident:{item['role_code']}"),
+                    embedding=await safe_embedding(embedding_text, label=f"incident:{item['role_code']}"),
                 )
                 db.add(incident)
                 await db.flush()
             else:
+                embedding_text = build_incident_embedding_input(
+                    description=item["description"],
+                    severity=item["severity"],
+                    location=item["location"],
+                    role_code=item["role_code"],
+                    incident_type=item["incident_type"],
+                    incident_category=item["incident_category"],
+                    incident_entities=item["incident_entities"],
+                )
                 incident.severity = item["severity"]
                 incident.status = "open"
+                incident.incident_type = item["incident_type"]
+                incident.incident_category = item["incident_category"]
+                incident.incident_entities_json = item["incident_entities"]
                 incident.role_id = roles[item["role_code"]].id
                 incident.location = item["location"]
                 incident.closed_by = None
                 incident.closed_at = None
-                incident.embedding = await safe_embedding(item["embedding_text"], label=f"incident:{item['role_code']}")
+                incident.embedding = await safe_embedding(embedding_text, label=f"incident:{item['role_code']}")
 
             analysis_run = (
                 await db.execute(

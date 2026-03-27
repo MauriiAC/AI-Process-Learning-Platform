@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/services/api";
+import { getSemanticScoreDetail, getSemanticScoreLabel } from "@/lib/semanticScore";
 import {
   AlertTriangle,
   Plus,
@@ -517,9 +518,8 @@ export default function IncidentsPage() {
                               >
                                 <div>
                                   <p className="text-sm font-medium text-gray-800">{s.title}</p>
-                                  <p className="text-xs text-gray-400">
-                                    Confianza: {(s.score * 100).toFixed(0)}%
-                                  </p>
+                                  <p className="text-xs text-gray-400">{getSemanticScoreLabel(s.score)}</p>
+                                  <p className="mt-1 text-[11px] text-gray-400">{getSemanticScoreDetail(s.score)}</p>
                                   {s.snippet && (
                                     <p className="mt-1 line-clamp-2 text-xs text-gray-500">{s.snippet}</p>
                                   )}
@@ -655,8 +655,11 @@ export default function IncidentsPage() {
                                     {run.related_matches.map((match) => (
                                       <div key={match.id} className="rounded border border-white/70 bg-white/70 px-3 py-2">
                                         <p className="text-xs text-gray-700">
-                                          {match.related_incident_description} · similitud{" "}
-                                          {((match.similarity_score || 0) * 100).toFixed(0)}%
+                                          {match.related_incident_description} ·{" "}
+                                          {getSemanticScoreLabel(match.similarity_score || 0)}
+                                        </p>
+                                        <p className="mt-1 text-[11px] text-gray-400">
+                                          {getSemanticScoreDetail(match.similarity_score || 0)}
                                         </p>
                                         {match.related_analysis_summary && (
                                           <p className="mt-1 text-xs text-gray-600">

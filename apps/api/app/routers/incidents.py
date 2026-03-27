@@ -41,6 +41,10 @@ from app.services.incident_memory_service import (
     build_finding_memory_line,
     get_similar_incident_analysis_runs,
 )
+from app.services.incident_semantic_service import (
+    build_incident_embedding_input,
+    classify_incident_semantics,
+)
 from app.services.search_service import MIN_SEMANTIC_SEARCH_SCORE, rank_procedure_versions_by_embedding
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
@@ -98,6 +102,9 @@ def _incident_out(item: Incident) -> IncidentOut:
         description=item.description,
         severity=item.severity,
         status=item.status,
+        incident_type=item.incident_type,
+        incident_category=item.incident_category,
+        incident_entities=list(item.incident_entities_json or []),
         role_id=item.role_id,
         role_name=item.role.name if getattr(item, "role", None) else None,
         role_code=item.role.code if getattr(item, "role", None) else None,
@@ -220,6 +227,46 @@ def _touch_operator_resolution(incident: Incident, current_user: User) -> None:
     incident.operator_resolution_by = current_user.id
 
 
+def _incident_role_code(role: Role | None) -> str | None:
+    return role.code if role is not None else None
+
+
+async def _classify_incident_payload(
+    *,
+    description: str,
+    severity: str,
+    location: str | None,
+    role: Role | None,
+) -> dict:
+    return await classify_incident_semantics(
+        description=description,
+        severity=severity,
+        location=location,
+        role_code=_incident_role_code(role),
+    )
+
+
+async def _build_incident_embedding(
+    *,
+    description: str,
+    severity: str,
+    location: str | None,
+    role: Role | None,
+    semantics: dict,
+) -> list[float]:
+    return await get_embedding(
+        build_incident_embedding_input(
+            description=description,
+            severity=severity,
+            location=location,
+            role_code=_incident_role_code(role),
+            incident_type=semantics["incident_type"],
+            incident_category=semantics["incident_category"],
+            incident_entities=semantics["incident_entities"],
+        )
+    )
+
+
 def _default_action_for_type(finding_type: str) -> str:
     if finding_type == "not_followed":
         return "Verificar cumplimiento operativo y reforzar el entrenamiento asociado."
@@ -283,16 +330,32 @@ async def create_incident(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    embedding = await get_embedding(payload.description)
+    role: Role | None = None
     if payload.role_id:
         role = (await db.execute(select(Role).where(Role.id == payload.role_id))).scalar_one_or_none()
         if role is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    semantics = await _classify_incident_payload(
+        description=payload.description,
+        severity=payload.severity,
+        location=payload.location,
+        role=role,
+    )
+    embedding = await _build_incident_embedding(
+        description=payload.description,
+        severity=payload.severity,
+        location=payload.location,
+        role=role,
+        semantics=semantics,
+    )
 
     incident = Incident(
         description=payload.description,
         severity=payload.severity,
         status="open",
+        incident_type=semantics["incident_type"],
+        incident_category=semantics["incident_category"],
+        incident_entities_json=semantics["incident_entities"],
         role_id=payload.role_id,
         location=payload.location,
         created_by=current_user.id,
@@ -331,12 +394,15 @@ async def update_incident(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
     changes = payload.model_dump(exclude_unset=True)
+    role: Role | None = None
     if "operator_comment" in changes:
         changes["operator_comment"] = (changes["operator_comment"] or "").strip() or None
     if "role_id" in changes and changes["role_id"] is not None:
         role = (await db.execute(select(Role).where(Role.id == changes["role_id"]))).scalar_one_or_none()
         if role is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    elif incident.role_id is not None:
+        role = (await db.execute(select(Role).where(Role.id == incident.role_id))).scalar_one_or_none()
     if "operator_selected_procedure_version_id" in changes and changes["operator_selected_procedure_version_id"] is not None:
         version = (
             await db.execute(
@@ -371,8 +437,29 @@ async def update_incident(
             continue
         setattr(incident, field, value)
 
-    if "description" in changes and changes["description"]:
-        incident.embedding = await get_embedding(changes["description"])
+    semantic_inputs_changed = bool({"description", "severity", "role_id", "location"}.intersection(changes))
+    if semantic_inputs_changed:
+        next_description = changes.get("description", incident.description)
+        next_severity = changes.get("severity", incident.severity)
+        next_location = changes.get("location", incident.location)
+        if "role_id" in changes and changes["role_id"] is None:
+            role = None
+        semantics = await _classify_incident_payload(
+            description=next_description,
+            severity=next_severity,
+            location=next_location,
+            role=role,
+        )
+        incident.incident_type = semantics["incident_type"]
+        incident.incident_category = semantics["incident_category"]
+        incident.incident_entities_json = semantics["incident_entities"]
+        incident.embedding = await _build_incident_embedding(
+            description=next_description,
+            severity=next_severity,
+            location=next_location,
+            role=role,
+            semantics=semantics,
+        )
     if next_status in OPERATOR_RESOLUTION_STATUSES and {
         "operator_comment",
         "operator_selected_procedure_version_id",
@@ -419,6 +506,8 @@ async def suggest_trainings_for_incident(
         limit=10,
         db=db,
         min_score=MIN_SEMANTIC_SEARCH_SCORE,
+        context_category=incident.incident_category,
+        context_entities=list(incident.incident_entities_json or []),
     )
     return [
         TrainingSuggestion(
@@ -537,12 +626,19 @@ async def analyze_incident_procedures(
     if incident.status == "closed":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Closed incidents cannot be analyzed")
 
-    related_incidents = await get_similar_incident_analysis_runs(incident_id, incident.embedding, db=db)
+    related_incidents = await get_similar_incident_analysis_runs(
+        incident_id,
+        incident.embedding,
+        db=db,
+        incident_category=incident.incident_category,
+    )
     matches = await rank_procedure_versions_by_embedding(
         incident.embedding,
         limit=5,
         db=db,
         min_score=MIN_SEMANTIC_SEARCH_SCORE,
+        context_category=incident.incident_category,
+        context_entities=list(incident.incident_entities_json or []),
     )
     return IncidentAnalysisPreviewOut(
         procedure_matches=[

@@ -13,6 +13,25 @@ class IncidentCreate(BaseModel):
 
 
 IncidentStatus = Literal["open", "resolved_by_operator", "escalated", "closed"]
+IncidentType = Literal[
+    "customer_claim",
+    "operational_deviation",
+    "product_quality_issue",
+    "safety_issue",
+    "pricing_issue",
+    "other",
+]
+IncidentCategory = Literal[
+    "food_quality",
+    "food_safety",
+    "pricing_billing",
+    "inventory_availability",
+    "equipment_maintenance",
+    "service_experience",
+    "process_compliance",
+    "cleanliness_hygiene",
+    "other",
+]
 
 
 class IncidentUpdate(BaseModel):
@@ -31,6 +50,9 @@ class IncidentOut(BaseModel):
     description: str
     severity: str
     status: IncidentStatus
+    incident_type: IncidentType
+    incident_category: IncidentCategory
+    incident_entities: list[str] = Field(default_factory=list)
     role_id: uuid.UUID | None
     role_name: str | None = None
     role_code: str | None = None

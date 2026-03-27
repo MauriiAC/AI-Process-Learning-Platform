@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { getSemanticScoreDetail, getSemanticScoreLabel } from "@/lib/semanticScore";
 import api from "@/services/api";
 
 interface RoleOption {
@@ -875,7 +876,8 @@ export default function IncidentDetailPage() {
                                   {match.procedure_code} · {match.procedure_title}
                                   {match.version_number != null ? ` · v${match.version_number}` : ""}
                                 </p>
-                                <p className="mt-1 text-xs text-gray-500">Relación: {(match.score * 100).toFixed(0)}%</p>
+                                <p className="mt-1 text-xs text-gray-500">{getSemanticScoreLabel(match.score)}</p>
+                                <p className="mt-1 text-[11px] text-gray-400">{getSemanticScoreDetail(match.score)}</p>
                                 {match.step_title && (
                                   <p className="mt-2 text-xs font-medium text-gray-500">
                                     Paso {match.step_index}: {match.step_title}
@@ -918,7 +920,10 @@ export default function IncidentDetailPage() {
                                   <div className="min-w-0 flex-1">
                                     <p className="text-sm font-medium text-gray-900">{related.description}</p>
                                     <p className="mt-1 text-xs text-gray-500">
-                                      Similitud: {(related.similarity_score * 100).toFixed(0)}%
+                                      {getSemanticScoreLabel(related.similarity_score)}
+                                    </p>
+                                    <p className="mt-1 text-[11px] text-gray-400">
+                                      {getSemanticScoreDetail(related.similarity_score)}
                                     </p>
                                     {related.analysis_run.analysis_summary && (
                                       <p className="mt-2 text-sm text-gray-600">{related.analysis_run.analysis_summary}</p>
@@ -1051,7 +1056,10 @@ export default function IncidentDetailPage() {
                         {run.related_matches.map((match) => (
                           <div key={match.id} className="rounded-lg border border-white/70 bg-white/80 px-3 py-3">
                             <p className="text-xs text-gray-700">
-                              {match.related_incident_description} · similitud {((match.similarity_score || 0) * 100).toFixed(0)}%
+                              {match.related_incident_description} · {getSemanticScoreLabel(match.similarity_score || 0)}
+                            </p>
+                            <p className="mt-1 text-[11px] text-gray-400">
+                              {getSemanticScoreDetail(match.similarity_score || 0)}
                             </p>
                             {match.related_analysis_summary && (
                               <p className="mt-1 text-xs text-gray-600">Análisis previo: {match.related_analysis_summary}</p>

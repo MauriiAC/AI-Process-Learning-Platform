@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, FileSearch, Loader2, Sparkles } from "lucide-r
 import { Link, useParams } from "react-router-dom";
 
 import { incidentSeverityMeta, incidentStatusMeta, type IncidentItem, type IncidentStatus } from "@/lib/operatorData";
+import { getSemanticScoreDetail, getSemanticScoreLabel } from "@/lib/semanticScore";
 import api from "@/services/api";
 
 interface AnalysisFinding {
@@ -285,7 +286,8 @@ export default function OperatorIncidentDetailPage() {
                             <p className="text-sm font-medium text-gray-900">
                               {match.procedure_code} · {match.procedure_title} · v{match.version_number}
                             </p>
-                            <p className="mt-1 text-xs text-gray-500">Relación {(match.score * 100).toFixed(0)}%</p>
+                            <p className="mt-1 text-xs text-gray-500">{getSemanticScoreLabel(match.score)}</p>
+                            <p className="mt-1 text-[11px] text-gray-400">{getSemanticScoreDetail(match.score)}</p>
                             {match.step_title && (
                               <p className="mt-2 text-xs font-medium text-gray-500">
                                 Paso {match.step_index}: {match.step_title}
@@ -343,8 +345,9 @@ export default function OperatorIncidentDetailPage() {
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-gray-900">{related.description}</p>
-                            <p className="mt-1 text-xs text-gray-500">
-                              Similitud {(related.similarity_score * 100).toFixed(0)}%
+                            <p className="mt-1 text-xs text-gray-500">{getSemanticScoreLabel(related.similarity_score)}</p>
+                            <p className="mt-1 text-[11px] text-gray-400">
+                              {getSemanticScoreDetail(related.similarity_score)}
                             </p>
                             {related.analysis_run.analysis_summary && (
                               <p className="mt-2 text-sm text-gray-700">{related.analysis_run.analysis_summary}</p>
